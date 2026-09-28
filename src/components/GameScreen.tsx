@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useGame, useSession } from "@/hooks/useGame";
 import { useHandTracking } from "@/hooks/useHandTracking";
 import { FxEngine } from "@/lib/fx/fxEngine";
+import { trackFor } from "@/lib/audio/music";
+import { PhaseTransition } from "./PhaseTransition";
 import { JUTSU } from "@/lib/game/jutsu";
 import { CHARACTERS } from "@/lib/game/characters";
 import { TIMING } from "@/lib/game/session";
@@ -30,6 +32,15 @@ import { JutsuSequence } from "./JutsuSequence";
 import { FailedPanel, ResultScreen } from "./ResultScreen";
 
 const LS_MUTE = "shinobi.muted";
+const LS_MUSIC = "shinobi.music";
+
+function readMusic() {
+  try {
+    return localStorage.getItem(LS_MUSIC) !== "0";
+  } catch {
+    return true;
+  }
+}
 
 function readMuted() {
   try {
@@ -63,13 +74,25 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
   const [comboPop, setComboPop] = useState<{ mult: number; key: number } | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [taunt, setTaunt] = useState<string | null>(null);
+  const [musicOn, setMusicOn] = useState(true);
 
   // --- setup ------------------------------------------------------------------
   useEffect(() => {
     const m = readMuted();
+    const mu = readMusic();
     setMuted(m);
+    setMusicOn(mu);
     session.sfx.setMuted(m);
+    session.music.setEnabled(!m && mu);
   }, [session]);
+
+  // Soundtrack follows the scene.
+  const track = trackFor(g.phase, g.bossHp, g.bossMaxHp);
+  useEffect(() => {
+    if (track) void session.music.play(track);
+    else session.music.stop();
+  }, [track, session]);
+  useEffect(() => () => session.music.stop(), [session]);
 
   useEffect(() => {
     if (!fxCanvas.current) return;
@@ -88,6 +111,7 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
       const n = !m;
       session.sfx.unlock();
       session.sfx.setMuted(n);
+      session.music.setEnabled(!n && musicOn);
       try {
         localStorage.setItem(LS_MUTE, n ? "1" : "0");
       } catch {
@@ -95,7 +119,21 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
       }
       return n;
     });
-  }, [session]);
+  }, [session, musicOn]);
+
+  const toggleMusic = useCallback(() => {
+    setMusicOn((on) => {
+      const n = !on;
+      session.music.unlock();
+      session.music.setEnabled(n && !muted);
+      try {
+        localStorage.setItem(LS_MUSIC, n ? "1" : "0");
+      } catch {
+        /* storage unavailable */
+      }
+      return n;
+    });
+  }, [session, muted]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -199,7 +237,7 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
       <div className="game-bg">
         <ArenaBackdrop location={location} showName={false} />
       </div>
-      <GameHUD muted={muted} onToggleMute={toggleMute} debug={debug} onToggleDebug={() => setDebug((d) => !d)} onQuit={quit} />
+      <GameHUD muted={muted} onToggleMute={toggleMute} musicOn={musicOn} onToggleMusic={toggleMusic} debug={debug} onToggleDebug={() => setDebug((d) => !d)} onQuit={quit} />
 
       <div className="game-main">
         <section className="col-camera">
@@ -268,6 +306,7 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
       )}
       {g.phase === "VICTORY" && showResult && <ResultScreen onExit={quit} />}
 
+      <PhaseTransition phase={g.phase} />
       {flash && <div className="flash" key={flash.key} style={{ background: flash.color }} />}
       <canvas ref={fxCanvas} className="fx-canvas" aria-hidden />
     </div>

@@ -87,6 +87,7 @@ export const STR = {
   debugTitle: { ru: "Отладка зрения (D)", en: "Vision debug overlay (D)" },
   mute: { ru: "Выключить звук (M)", en: "Mute (M)" },
   unmute: { ru: "Включить звук (M)", en: "Unmute (M)" },
+  musicTitle: { ru: "Музыка вкл/выкл", en: "Music on/off" },
   detected: { ru: "РАСПОЗНАНО", en: "DETECTED" },
   noHands: { ru: "НЕТ РУК", en: "NO HANDS" },
   noSeal: { ru: "НЕТ ПЕЧАТИ", en: "NO SEAL" },

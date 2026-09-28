@@ -21,6 +21,7 @@ export default function ShinobiApp() {
     const q = new URLSearchParams(window.location.search);
     setFlags({ synthetic: q.has("synthetic"), debug: q.has("debug") });
     session.sfx.unlock();
+    session.music.unlock();
     session.sfx.select();
     session.dispatch({ type: "START" });
   }, [session]);

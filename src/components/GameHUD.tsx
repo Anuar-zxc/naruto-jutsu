@@ -11,12 +11,14 @@ import { Portrait } from "./Portrait";
 interface Props {
   muted: boolean;
   onToggleMute: () => void;
+  musicOn: boolean;
+  onToggleMusic: () => void;
   debug: boolean;
   onToggleDebug: () => void;
   onQuit: () => void;
 }
 
-export function GameHUD({ muted, onToggleMute, debug, onToggleDebug, onQuit }: Props) {
+export function GameHUD({ muted, onToggleMute, musicOn, onToggleMusic, debug, onToggleDebug, onQuit }: Props) {
   useLang();
   const g = useGame();
   const mult = comboMultiplier(g.stats.combo);
@@ -59,6 +61,9 @@ export function GameHUD({ muted, onToggleMute, debug, onToggleDebug, onQuit }: P
         <LangToggle />
         <button className={`icon-btn ${debug ? "on" : ""}`} onClick={onToggleDebug} title={t("debugTitle")}>
           ◉
+        </button>
+        <button className={`icon-btn ${musicOn && !muted ? "on-gold" : "off"}`} onClick={onToggleMusic} title={t("musicTitle")} aria-label={t("musicTitle")}>
+          ♪
         </button>
         <button className="icon-btn" onClick={onToggleMute} title={muted ? t("unmute") : t("mute")} aria-label={muted ? t("unmute") : t("mute")}>
           {muted ? "🔇" : "🔊"}

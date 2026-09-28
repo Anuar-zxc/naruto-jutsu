@@ -16,6 +16,7 @@ import { GestureRecognizer } from "../src/lib/vision/gestureRecognizer";
 import { SIGNS } from "../src/lib/vision/gestureDefinitions";
 import { poseForSign, syntheticFrame } from "../src/lib/vision/syntheticHand";
 import { setLang } from "../src/lib/i18n";
+import { trackFor } from "../src/lib/audio/music";
 import type { GameAction, GameState, JutsuId } from "../src/types/game";
 import type { SignId } from "../src/types/gestures";
 
@@ -110,6 +111,15 @@ async function main() {
     assert.equal(s.phase, "COUNTDOWN");
     assert.equal(s.seqIndex, 0);
     assert.equal(s.timeLeftMs, JUTSU.GOKAKYU.timeLimitMs);
+  });
+
+  await test("soundtrack follows the scene", () => {
+    assert.equal(trackFor("IDLE", 1000, 1000), null);
+    assert.equal(trackFor("CHARACTER_SELECT", 1000, 1000), "menu");
+    assert.equal(trackFor("DIALOGUE", 1000, 1000), "dialogue");
+    assert.equal(trackFor("PLAYING", 900, 1000), "battle");
+    assert.equal(trackFor("PLAYING", 300, 1000), "boss");
+    assert.equal(trackFor("VICTORY", 0, 1000), "victory");
   });
 
   await test("illegal actions are ignored", () => {

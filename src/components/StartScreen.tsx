@@ -26,8 +26,9 @@ export function StartScreen({ onStart }: { onStart: () => void }) {
       <Embers />
       <div className="start-bg" />
       <div className="start-watermark">忍術</div>
+      <div className="start-enso" aria-hidden />
       <div className="start-roster" aria-hidden>
-        {roster.map((c, i) => (
+        {roster.map((c) => (
           <Portrait key={c.id} ch={c} className="roster-img" />
         ))}
       </div>

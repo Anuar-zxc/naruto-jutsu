@@ -79,6 +79,10 @@ Damage and time scale with the number of seals: 3 seals give 220 damage in 13 s,
 - **24 playable characters**, each with a perk (extra time, or a damage bonus to an element or to everything). If you fight as a villain who is also the chapter boss, you face their "Shadow".
 - **Russian / English:** the whole UI switches with the RU / EN toggle, including every Error Mode correction ("Выпрями средние пальцы на обеих руках."). The language is detected automatically and remembered.
 
+## Music
+
+Each scene has its own track: menu, dialogue, battle, boss (enemy below 35% HP) and victory. By default the game plays an **original score generated live in the browser**: Japanese *in*-scale melodies on a koto-like pluck, a breathy flute pad and taiko drums. To use your own licensed soundtrack, put `menu.mp3`, `dialogue.mp3`, `battle.mp3`, `boss.mp3` and `victory.mp3` into `public/assets/music/`. The game detects them and cross-fades between tracks, and any file that's missing falls back to the generated score. The ♪ button in the HUD toggles music, 🔊 / M mutes everything.
+
 ## Error Mode
 
 Error Mode is in `src/lib/vision/correctionEngine.ts`. It runs on every frame against the seal the player *should* be making.
@@ -164,7 +168,7 @@ npm run dev        # http://localhost:3000
 Other commands:
 
 ```bash
-npm test           # 41 tests: features, all 12 seals, smoothing, every correction path, story + quick game flow
+npm test           # 42 tests: features, all 12 seals, smoothing, every correction path, story + quick game flow
 npm run typecheck
 npm run build && npm start
 ```

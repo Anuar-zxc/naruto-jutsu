@@ -14,6 +14,7 @@ import { gameReducer, initialGameState } from "./gameState";
 import { JUTSU } from "./jutsu";
 import { isComboMilestone } from "./combo";
 import { Sfx } from "@/lib/audio/sfx";
+import { MusicPlayer } from "@/lib/audio/music";
 import { CorrectionStabilizer, MIN_PALM_SIZE } from "@/lib/vision/correctionEngine";
 import { SIGNS } from "@/lib/vision/gestureDefinitions";
 import type { GestureRecognizer } from "@/lib/vision/gestureRecognizer";
@@ -69,6 +70,7 @@ const EMPTY_LIVE: LiveHud = { hands: 0, detected: null, confidence: 0, hold: nul
 
 export class GameSession {
   readonly sfx = new Sfx();
+  readonly music = new MusicPlayer();
   readonly overlay: OverlayState = { tone: "idle", highlight: null };
 
   private state: GameState = initialGameState();

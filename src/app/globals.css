@@ -2523,3 +2523,275 @@ img.flip {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ==========================================================================
+   v4 design pass — ink, paper, frames, cinematic transitions
+   ========================================================================== */
+
+/* paper grain over everything (very subtle) */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;
+  opacity: 0.07;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* ink-brush wipe between scenes */
+.ink-wipe {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  pointer-events: none;
+  overflow: hidden;
+}
+.ink-band {
+  position: absolute;
+  top: -10%;
+  bottom: -10%;
+  left: -20%;
+  width: 140%;
+  background: #050306;
+  clip-path: polygon(8% 0, 100% 0, 92% 100%, 0 100%, 4% 70%, 1% 45%, 6% 20%);
+  animation: ink-sweep 0.9s cubic-bezier(0.7, 0, 0.3, 1) both;
+}
+.ink-kanji {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-kanji);
+  font-weight: 900;
+  font-size: min(40vw, 380px);
+  color: var(--red);
+  text-shadow: 0 0 60px rgba(230, 57, 70, 0.8);
+  animation: ink-kanji 0.9s ease-out both;
+}
+@keyframes ink-sweep {
+  0% { transform: translateX(-110%) skewX(-12deg); }
+  45%, 55% { transform: translateX(0) skewX(-12deg); }
+  100% { transform: translateX(110%) skewX(-12deg); }
+}
+@keyframes ink-kanji {
+  0%, 25% { opacity: 0; transform: scale(1.5); }
+  45% { opacity: 1; transform: scale(1); }
+  60% { opacity: 1; }
+  80%, 100% { opacity: 0; transform: scale(0.9); }
+}
+
+/* HUD: brush-red seal logo + glowing rule */
+.hud {
+  position: relative;
+  background: linear-gradient(180deg, rgba(5, 3, 7, 0.9), rgba(5, 3, 7, 0.4));
+  border-bottom: none;
+}
+.hud::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--crimson) 15%, var(--gold) 50%, var(--crimson) 85%, transparent);
+  opacity: 0.7;
+}
+.logo-kanji {
+  background: var(--crimson);
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 20px;
+  box-shadow: 0 0 18px rgba(179, 18, 46, 0.6);
+  transform: rotate(-4deg);
+  display: inline-block;
+}
+.icon-btn.on-gold {
+  border-color: var(--gold);
+  color: var(--gold);
+  box-shadow: 0 0 14px -4px var(--gold);
+}
+.icon-btn.off {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+/* ornate corner frames on panels */
+.arena::before,
+.current-seal::before,
+.sequence::before,
+.dlg-box::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  z-index: 5;
+  pointer-events: none;
+  border-radius: 14px;
+  opacity: 0.6;
+  background:
+    linear-gradient(var(--gold), var(--gold)) top left / 20px 2px no-repeat,
+    linear-gradient(var(--gold), var(--gold)) top left / 2px 20px no-repeat,
+    linear-gradient(var(--gold), var(--gold)) top right / 20px 2px no-repeat,
+    linear-gradient(var(--gold), var(--gold)) top right / 2px 20px no-repeat,
+    linear-gradient(var(--gold), var(--gold)) bottom left / 20px 2px no-repeat,
+    linear-gradient(var(--gold), var(--gold)) bottom left / 2px 20px no-repeat,
+    linear-gradient(var(--gold), var(--gold)) bottom right / 20px 2px no-repeat,
+    linear-gradient(var(--gold), var(--gold)) bottom right / 2px 20px no-repeat;
+}
+.current-seal,
+.sequence {
+  position: relative;
+}
+.camera-panel {
+  box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.9), inset 0 0 0 1px rgba(255, 255, 255, 0.03), 0 0 0 1px rgba(179, 18, 46, 0.25), 0 0 60px -30px rgba(179, 18, 46, 0.7);
+}
+.phase-playing.camera-panel {
+  box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.9), 0 0 0 1px var(--el), 0 0 60px -20px var(--el);
+}
+.sequence {
+  background: linear-gradient(180deg, rgba(24, 16, 28, 0.9), rgba(10, 7, 13, 0.92));
+}
+
+/* primary buttons: light sweep */
+.btn.primary {
+  position: relative;
+  overflow: hidden;
+}
+.btn.primary::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40%;
+  left: -60%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  animation: btn-shine 3.2s ease-in-out infinite;
+}
+@keyframes btn-shine {
+  0%, 60% { left: -60%; }
+  100% { left: 130%; }
+}
+
+/* select screens: brush-stroke underline under titles */
+.select-title::after {
+  content: "";
+  display: block;
+  width: min(320px, 70vw);
+  height: 16px;
+  margin: 6px auto 0;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 16'><path d='M4 10 C60 3 120 12 170 7 S270 4 316 9 L312 13 C250 10 200 15 150 12 S50 14 6 14 Z' fill='%23b3122e'/></svg>") center / contain no-repeat;
+  opacity: 0.9;
+}
+.select-overlay {
+  background:
+    radial-gradient(1200px 500px at 50% -10%, rgba(179, 18, 46, 0.25), transparent 60%),
+    rgba(4, 3, 7, 0.8);
+}
+.char-overlay .char-preview {
+  position: relative;
+}
+.char-overlay .char-preview::before {
+  content: "";
+  position: absolute;
+  left: -60px;
+  bottom: -20px;
+  width: 360px;
+  height: 300px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--hero) 45%, transparent), transparent 65%);
+  filter: blur(10px);
+  z-index: -1;
+  transition: background 0.3s;
+}
+
+/* jutsu cast: manga speed lines */
+.cast-banner::before {
+  content: "";
+  position: absolute;
+  inset: -50%;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 255, 255, 0.16) 0deg 1.2deg, transparent 1.2deg 7deg);
+  -webkit-mask-image: radial-gradient(circle, transparent 18%, #000 60%);
+  mask-image: radial-gradient(circle, transparent 18%, #000 60%);
+  animation: speedlines 0.6s linear infinite;
+}
+@keyframes speedlines {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(7deg); }
+}
+.cb-title,
+.cb-kanji {
+  position: relative;
+}
+
+/* dialogue: cinematic letterbox + brush name plate */
+.dialogue::before,
+.dialogue::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 7vh;
+  background: #000;
+  z-index: 2;
+  animation: letterbox 0.6s ease-out both;
+}
+.dialogue::before {
+  top: 0;
+}
+.dialogue::after {
+  bottom: 0;
+  height: 3vh;
+}
+@keyframes letterbox {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+.dlg-box {
+  z-index: 3;
+}
+.dlg-name {
+  clip-path: polygon(4% 0, 100% 0, 96% 100%, 0 100%);
+  padding: 2px 22px;
+}
+
+/* start screen: brush enso ring behind the title + shimmer */
+.start-enso {
+  position: absolute;
+  width: min(70vw, 620px);
+  aspect-ratio: 1;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -62%);
+  border-radius: 50%;
+  border: 14px solid rgba(179, 18, 46, 0.35);
+  -webkit-mask-image: conic-gradient(from 20deg, #000 0deg 300deg, transparent 330deg);
+  mask-image: conic-gradient(from 20deg, #000 0deg 300deg, transparent 330deg);
+  filter: blur(0.5px) drop-shadow(0 0 30px rgba(230, 57, 70, 0.5));
+  animation: enso 40s linear infinite;
+  pointer-events: none;
+}
+@keyframes enso {
+  from { transform: translate(-50%, -62%) rotate(0deg); }
+  to { transform: translate(-50%, -62%) rotate(360deg); }
+}
+.start-title {
+  background-size: 100% 200%;
+  animation: title-glow 4s ease-in-out infinite;
+}
+@keyframes title-glow {
+  0%, 100% { filter: drop-shadow(0 0 30px rgba(255, 80, 30, 0.35)); }
+  50% { filter: drop-shadow(0 0 50px rgba(255, 120, 40, 0.6)); }
+}
+
+/* boss: breathing idle + element-coloured rim light */
+.boss-img {
+  animation: breathe 3.2s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.015) translateY(-2px); }
+}
+.boss.shadow .boss-img {
+  filter: grayscale(0.6) brightness(0.7) drop-shadow(0 0 18px rgba(120, 60, 255, 0.8));
+}
