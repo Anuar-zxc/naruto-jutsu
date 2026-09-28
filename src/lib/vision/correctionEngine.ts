@@ -213,6 +213,15 @@ export class CorrectionStabilizer {
     this.pendingCount = 0;
   }
 
+  /** Show `c` immediately (used when a mistake is counted and the message must match NOW). */
+  force(c: Correction | null, t: number): Correction | null {
+    this.shown = c;
+    this.shownAt = t;
+    this.pending = null;
+    this.pendingCount = 0;
+    return c;
+  }
+
   update(c: Correction | null, t: number): Correction | null {
     const key = c?.key ?? null;
     if (key === (this.shown?.key ?? null)) {
