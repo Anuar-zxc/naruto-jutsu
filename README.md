@@ -4,7 +4,7 @@
 
 A browser game where you cast jutsu by performing ninja-style hand seals in front of your webcam. The camera tracks both hands in real time, our own classifier recognises each seal, and a boss takes damage when you finish a sequence. If a seal is wrong, the game tells you **exactly what to fix**: *"Extend your index fingers."*, *"Bring your hands closer together."*, *"Rotate your right hand inward."*
 
-**Live demo:** `https://<your-project>.vercel.app` ← replace after deploying
+**Live demo:** https://shinobi-jutsu.vercel.app
 
 ---
 
