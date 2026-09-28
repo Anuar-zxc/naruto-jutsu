@@ -13,6 +13,14 @@ import type { GameState } from "@/types/game";
 import { Boss } from "./Boss";
 import { ArenaBackdrop } from "./ArenaBackdrop";
 import { CharacterSelect } from "./CharacterSelect";
+import { ChapterSelect } from "./ChapterSelect";
+import { DialogueBox } from "./DialogueBox";
+import { ModeSelect } from "./ModeSelect";
+import { Portrait } from "./Portrait";
+import { locationFor } from "@/lib/game/gameState";
+import { CHAPTERS } from "@/lib/game/story";
+import { t, tr } from "@/lib/i18n";
+import { useLang } from "@/hooks/useLang";
 import { CameraView } from "./CameraView";
 import { CurrentSeal } from "./CurrentSeal";
 import { DebugOverlay } from "./DebugOverlay";
@@ -32,6 +40,7 @@ function readMuted() {
 }
 
 export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boolean; initialDebug: boolean; onExit: () => void }) {
+  useLang();
   const session = useSession();
   const g = useGame();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -53,6 +62,7 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
   const [pop, setPop] = useState<{ kanji: string; points: number; mult: number; key: number } | null>(null);
   const [comboPop, setComboPop] = useState<{ mult: number; key: number } | null>(null);
   const [showResult, setShowResult] = useState(false);
+  const [taunt, setTaunt] = useState<string | null>(null);
 
   // --- setup ------------------------------------------------------------------
   useEffect(() => {
@@ -128,6 +138,13 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
       shake(false);
     }
 
+    // Enemy taunt when HP first drops below half (story mode).
+    if (g.mode === "story" && g.chapter != null && p.bossHp > p.bossMaxHp / 2 && g.bossHp <= g.bossMaxHp / 2 && g.bossHp > 0) {
+      const line = tr(CHAPTERS[g.chapter].taunt);
+      setTimeout(() => setTaunt(line), 900);
+      setTimeout(() => setTaunt(null), 4200);
+    }
+
     if (g.phase === p.phase) return;
 
     if (g.phase === "SUCCESS" && j) {
@@ -158,9 +175,10 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
       }, 700);
       setTimeout(() => setShowResult(true), 2300);
     }
-    if (g.phase === "JUTSU_SELECTION" || g.phase === "IDLE") {
+    if (g.phase === "JUTSU_SELECTION" || g.phase === "IDLE" || g.phase === "DIALOGUE" || g.phase === "CHAPTER_SELECT") {
       setShowResult(false);
       setDamage(null);
+      if (g.phase !== "JUTSU_SELECTION") setTaunt(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [g]);
@@ -174,11 +192,12 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
   const casting = g.phase === "SUCCESS" || g.phase === "JUTSU_CAST";
   const hpDelay = g.phase === "JUTSU_CAST" ? TIMING.castImpact : 0;
   const hero = g.characterId ? CHARACTERS[g.characterId] : null;
+  const location = locationFor(g);
 
   return (
     <div ref={rootRef} className="game" style={j ? { ["--el" as string]: j.color, ["--el-glow" as string]: j.glow } : undefined}>
       <div className="game-bg">
-        <ArenaBackdrop round={g.round} showName={false} />
+        <ArenaBackdrop location={location} showName={false} />
       </div>
       <GameHUD muted={muted} onToggleMute={toggleMute} debug={debug} onToggleDebug={() => setDebug((d) => !d)} onQuit={quit} />
 
@@ -196,19 +215,29 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
           )}
           {comboPop && (
             <div className="combo-pop" key={`c${comboPop.key}`}>
-              COMBO ×{comboPop.mult}
+              {t("combo")} ×{comboPop.mult}
             </div>
           )}
           {debug && <DebugOverlay frameRef={lastFrame} />}
         </section>
 
         <section className="col-side">
-          <Boss ref={bossRef} bossId={g.bossId} round={g.round} hp={g.bossHp} maxHp={g.bossMaxHp} hitKey={hitKey} damage={damage} defeated={g.phase === "VICTORY"} hpDelayMs={hpDelay} />
+          <Boss
+            ref={bossRef}
+            bossId={g.bossId}
+            heroId={g.characterId}
+            location={location}
+            hp={g.bossHp}
+            maxHp={g.bossMaxHp}
+            hitKey={hitKey}
+            damage={damage}
+            defeated={g.phase === "VICTORY"}
+            hpDelayMs={hpDelay}
+            taunt={taunt}
+          />
           <CurrentSeal />
           {(g.phase === "CAMERA_CHECK" || g.phase === "READY") && (
-            <div className="side-note">
-              Show both hands to the camera to begin the trial. Then choose your shinobi — your enemy is waiting.
-            </div>
+            <div className="side-note">{t("sideNote")}</div>
           )}
         </section>
       </div>
@@ -217,21 +246,24 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
         <JutsuSequence />
       </footer>
 
+      {g.phase === "MODE_SELECT" && <ModeSelect />}
       {g.phase === "CHARACTER_SELECT" && <CharacterSelect />}
+      {g.phase === "CHAPTER_SELECT" && <ChapterSelect />}
+      {g.phase === "DIALOGUE" && <DialogueBox />}
       {g.phase === "JUTSU_SELECTION" && <JutsuSelect />}
       {g.phase === "FAILED" && <FailedPanel />}
       {casting && j && (
         <div className="cast-banner">
-          {hero && <img className="cb-hero" src={hero.image} alt="" />}
+          {hero && <Portrait ch={hero} className="cb-hero" />}
           <div className="cb-kanji">{j.kanji}</div>
-          <div className="cb-title">{g.phase === "SUCCESS" ? "JUTSU CAST!" : j.name.toUpperCase()}</div>
-          {g.phase === "JUTSU_CAST" && g.lastCast?.perfect && <div className="cb-perfect">PERFECT JUTSU · +{g.lastCast.perfectBonus}</div>}
-          {g.phase === "JUTSU_CAST" && g.lastCast && g.lastCast.speedBonus > 0 && <div className="cb-bonus">SPEED BONUS +{g.lastCast.speedBonus}</div>}
+          <div className="cb-title">{g.phase === "SUCCESS" ? t("jutsuCast") : tr(j.name).toUpperCase()}</div>
+          {g.phase === "JUTSU_CAST" && g.lastCast?.perfect && <div className="cb-perfect">{t("perfectJutsu", { n: g.lastCast.perfectBonus })}</div>}
+          {g.phase === "JUTSU_CAST" && g.lastCast && g.lastCast.speedBonus > 0 && <div className="cb-bonus">{t("speedBonus", { n: g.lastCast.speedBonus })}</div>}
         </div>
       )}
       {g.phase === "NEXT_ROUND" && (
         <div className="round-banner" key={g.round}>
-          ROUND {g.round + 1}
+          {t("round")} {g.round + 1}
         </div>
       )}
       {g.phase === "VICTORY" && showResult && <ResultScreen onExit={quit} />}

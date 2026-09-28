@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { initLang } from "@/lib/i18n";
 import { SessionContext, useCreateSession } from "@/hooks/useGame";
 import { useSyncExternalStore } from "react";
 import { GameScreen } from "./GameScreen";
@@ -10,6 +11,11 @@ export default function ShinobiApp() {
   const session = useCreateSession();
   const phase = useSyncExternalStore(session.subscribe, () => session.getState().phase, () => "IDLE" as const);
   const [flags, setFlags] = useState({ synthetic: false, debug: false });
+
+  useEffect(() => {
+    initLang();
+    session.loadProgress();
+  }, [session]);
 
   const start = useCallback(() => {
     const q = new URLSearchParams(window.location.search);

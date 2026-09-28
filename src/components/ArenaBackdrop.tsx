@@ -1,13 +1,14 @@
-import { stageForRound } from "@/lib/game/characters";
+import type { Location } from "@/lib/game/locations";
+import { tr } from "@/lib/i18n";
+import { StageScene } from "./StageScenes";
 
-/** Stage background for the current round (village → valley → academy, then loops). */
-export function ArenaBackdrop({ round, showName = true }: { round: number; showName?: boolean }) {
-  const stage = stageForRound(round);
+/** Background for a location: licensed artwork or an original SVG scene. */
+export function ArenaBackdrop({ location, showName = true }: { location: Location; showName?: boolean }) {
   return (
-    <div className="backdrop" key={stage.id} aria-hidden>
-      <div className="backdrop-img" style={{ backgroundImage: `url(${stage.image})` }} />
+    <div className="backdrop" key={location.id} aria-hidden>
+      {location.image ? <div className="backdrop-img" style={{ backgroundImage: `url(${location.image})` }} /> : location.scene && <StageScene scene={location.scene} />}
       <div className="backdrop-shade" />
-      {showName && <div className="stage-name">{stage.name}</div>}
+      {showName && <div className="stage-name">{tr(location.name)}</div>}
     </div>
   );
 }

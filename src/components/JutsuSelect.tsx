@@ -2,16 +2,25 @@
 
 import { useEffect } from "react";
 import { useGame, useSession } from "@/hooks/useGame";
-import { JUTSU_LIST } from "@/lib/game/jutsu";
-import { SIGNS } from "@/lib/vision/gestureDefinitions";
-import type { JutsuId } from "@/types/game";
+import { useLang } from "@/hooks/useLang";
+import { JUTSU, JUTSU_ORDER } from "@/lib/game/jutsu";
+import { availableJutsu, timeLimit } from "@/lib/game/gameState";
 import { CHARACTERS, damageMultiplier } from "@/lib/game/characters";
+import { CHAPTERS } from "@/lib/game/story";
+import { SIGNS } from "@/lib/vision/gestureDefinitions";
+import { t, tr } from "@/lib/i18n";
+import type { JutsuId } from "@/types/game";
+import { Portrait } from "./Portrait";
 
 export function JutsuSelect() {
+  useLang();
   const g = useGame();
   const session = useSession();
   const hero = g.characterId ? CHARACTERS[g.characterId] : null;
   const foe = g.bossId ? CHARACTERS[g.bossId] : null;
+  const available = availableJutsu(g);
+  const fresh = g.mode === "story" && g.chapter != null ? CHAPTERS[g.chapter].unlocks : [];
+  const list = JUTSU_ORDER.filter((id) => available.includes(id));
 
   const choose = (id: JutsuId) => {
     session.sfx.unlock();
@@ -21,65 +30,84 @@ export function JutsuSelect() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const i = ["1", "2", "3"].indexOf(e.key);
-      if (i >= 0 && !new URLSearchParams(location.search).has("synthetic")) choose(JUTSU_LIST[i].id);
+      if (new URLSearchParams(location.search).has("synthetic")) return;
+      const i = Number(e.key) - 1;
+      if (i >= 0 && i < list.length) choose(list[i]);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  });
 
   return (
-    <div className="select-overlay">
+    <div className="select-overlay jutsu-overlay">
       <div className="select-title">
-        <span>ROUND {g.round}</span>
+        <span>
+          {t("round")} {g.round}
+        </span>
         {hero && foe && (
           <div className="versus">
-            <img src={hero.image} alt="" />
-            <b>{hero.name.toUpperCase()}</b>
-            <em>VS</em>
-            <b>{foe.name.toUpperCase()}</b>
-            <img src={foe.image} alt="" />
+            <Portrait ch={hero} className="vs-img" />
+            <b>{tr(hero.name).toUpperCase()}</b>
+            <em>{t("vs")}</em>
+            <b>{tr(foe.name).toUpperCase()}</b>
+            <Portrait ch={foe} className="vs-img" />
           </div>
         )}
-        CHOOSE YOUR JUTSU
+        {t("chooseJutsu")}
       </div>
-      <div className="select-cards">
-        {JUTSU_LIST.map((j) => (
-          <button
-            key={j.id}
-            className={`jutsu-card el-${j.element}`}
-            style={{ ["--el" as string]: j.color, ["--el-glow" as string]: j.glow }}
-            onClick={() => choose(j.id)}
-            data-jutsu={j.id}
-          >
-            <div className="jc-kanji">{j.kanji}</div>
-            <div className="jc-style">{j.style.toUpperCase()}</div>
-            <div className="jc-name">{j.name}</div>
-            <div className="jc-seq">
-              {j.sequence.map((s, i) => (
-                <span key={i} title={SIGNS[s].name}>
-                  {SIGNS[s].kanji}
+      <div className={`select-cards n${Math.min(list.length, 9)}`}>
+        {list.map((id, i) => {
+          const j = JUTSU[id];
+          return (
+            <button
+              key={j.id}
+              className={`jutsu-card el-${j.element}`}
+              style={{ ["--el" as string]: j.color, ["--el-glow" as string]: j.glow, animationDelay: `${i * 0.04}s` }}
+              onClick={() => choose(j.id)}
+              data-jutsu={j.id}
+            >
+              {fresh.includes(id) && <span className="jc-new">NEW</span>}
+              <div className="jc-top">
+                <div className="jc-kanji">{j.kanji}</div>
+                <div className="jc-key">{i + 1}</div>
+              </div>
+              <div className="jc-name">{tr(j.name)}</div>
+              <div className="jc-romaji">{j.romaji}</div>
+              <div className="jc-seq">
+                {j.sequence.map((s, k) => (
+                  <span key={k} title={tr(SIGNS[s].name)}>
+                    {SIGNS[s].kanji}
+                  </span>
+                ))}
+              </div>
+              {j.note && <div className="jc-note">{tr(j.note)}</div>}
+              <div className="jc-meta">
+                <span>
+                  {t("dmg")} <b>{Math.round(j.damage * damageMultiplier(hero, j.element))}</b>
                 </span>
-              ))}
-            </div>
-            <div className="jc-meta">
-              <span>
-                DMG <b>{Math.round(j.damage * damageMultiplier(hero, j.element))}</b>
-              </span>
-              <span>
-                <b>{Math.max(5, (j.timeLimitMs + (hero?.timeBonusMs ?? 0)) / 1000)}</b>s
-              </span>
-              <span className="jc-stars">{"★".repeat(j.difficulty) + "☆".repeat(3 - j.difficulty)}</span>
-            </div>
-          </button>
-        ))}
+                <span>
+                  <b>{Math.round(timeLimit(g, j.timeLimitMs) / 1000)}</b>
+                  {t("sec")}
+                </span>
+                <span className="jc-stars">{"★".repeat(j.difficulty) + "☆".repeat(3 - j.difficulty)}</span>
+              </div>
+            </button>
+          );
+        })}
       </div>
-      <div className="select-tip">Perform every seal before the timer runs out. No mistakes = PERFECT JUTSU (+25% damage).</div>
+      <div className="select-tip">{t("jutsuTip")}</div>
       {g.round === 1 && (
-        <button className="btn ghost small" onClick={() => session.dispatch({ type: "CHANGE_CHARACTER" })}>
-          ← CHANGE SHINOBI
-        </button>
+        <div className="chapter-actions">
+          {g.mode === "story" ? (
+            <button className="btn ghost small" onClick={() => session.dispatch({ type: "BACK_TO_CHAPTERS" })}>
+              ← {t("chapters")}
+            </button>
+          ) : (
+            <button className="btn ghost small" onClick={() => session.dispatch({ type: "CHANGE_CHARACTER" })}>
+              {t("changeShinobi")}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

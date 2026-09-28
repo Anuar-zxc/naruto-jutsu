@@ -4,17 +4,19 @@ import { HAND_SHAPES } from "@/lib/vision/gestureDefinitions";
 /**
  * Procedural pictogram of a seal, generated from its definition so the
  * picture can never drift out of sync with what the classifier expects.
+ * Shows distance (together), height (palm above fist) and direction (down).
  */
 const FINGER_H = { index: 34, middle: 38, ring: 35, pinky: 28 } as const;
 
-function Hand({ shape, side, x }: { shape: HandShapeId; side: "left" | "right"; x: number }) {
+function Hand({ shape, side, x, y = 0, down = false }: { shape: HandShapeId; side: "left" | "right"; x: number; y?: number; down?: boolean }) {
   const f = HAND_SHAPES[shape].fingers;
   // Index finger on the inner side (toward the other hand).
   const order = side === "left" ? (["pinky", "ring", "middle", "index"] as const) : (["index", "middle", "ring", "pinky"] as const);
   const thumbOpen = shape === "OPEN";
   const inner = side === "left" ? 1 : -1;
+  const flip = down ? " rotate(180 27 48)" : "";
   return (
-    <g transform={`translate(${x} 0)`}>
+    <g transform={`translate(${x} ${y})${flip}`}>
       {order.map((name, i) => {
         const up = f[name] === 1;
         const h = up ? FINGER_H[name] : 11;
@@ -40,14 +42,15 @@ function Hand({ shape, side, x }: { shape: HandShapeId; side: "left" | "right"; 
 }
 
 export function HandPictogram({ def, size = 120 }: { def: SignDefinition; size?: number }) {
-  const gap = def.distance?.max != null ? 4 : def.distance?.min != null ? 44 : 16;
+  const stacked = def.stack === "topFirst";
+  const gap = def.distance?.max != null ? 4 : stacked ? -30 : 16;
+  const lift = stacked ? 44 : 0;
   const width = 54 * 2 + gap;
-  const wide = def.distance?.min != null;
+  const height = 94 + lift;
   return (
-    <svg className="pictogram" viewBox={`-4 -2 ${width + 8} ${wide ? 100 : 94}`} width={size} height={(size * 94) / (width + 8)} aria-hidden>
-      <Hand shape={def.shapes[0]} side="left" x={0} />
-      <Hand shape={def.shapes[1]} side="right" x={54 + gap} />
-      {wide && <path d={`M${58} 96 L${50 + gap} 96 M${58} 96 l5 -3 M${58} 96 l5 3 M${50 + gap} 96 l-5 -3 M${50 + gap} 96 l-5 3`} className="pic-arrow" />}
+    <svg className="pictogram" viewBox={`-4 ${-2 - lift} ${width + 8} ${height}`} width={size} height={(size * height) / (width + 8)} aria-hidden>
+      <Hand shape={def.shapes[0]} side="left" x={0} y={stacked ? -lift : 0} down={def.pointDown} />
+      <Hand shape={def.shapes[1]} side="right" x={54 + gap} down={def.pointDown} />
     </svg>
   );
 }

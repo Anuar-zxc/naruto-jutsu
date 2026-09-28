@@ -45,6 +45,7 @@ const PALETTE: Record<Element, string[]> = {
   fire: ["#fff3c4", "#ffd166", "#ff9f1c", "#ff5e1a", "#e63946"],
   water: ["#e8fbff", "#9be7ff", "#4cc9f0", "#1f8bff", "#3a5bff"],
   lightning: ["#ffffff", "#e3f1ff", "#b8c8ff", "#b28cff", "#7b5cff"],
+  chakra: ["#ffffff", "#c9f4ff", "#7fe3ff", "#2ec5ff", "#1b6fff"],
 };
 
 const pick = <T,>(a: T[]) => a[(Math.random() * a.length) | 0];

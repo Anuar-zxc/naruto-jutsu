@@ -1,40 +1,47 @@
 "use client";
 
 import { useState } from "react";
-import { useSession } from "@/hooks/useGame";
-import { CHARACTER_LIST, CHARACTERS, bossFor, type CharacterId } from "@/lib/game/characters";
+import { useGame, useSession } from "@/hooks/useGame";
+import { useLang } from "@/hooks/useLang";
+import { CHARACTERS, PLAYABLE, bossFor, randomBossFor, type CharacterId } from "@/lib/game/characters";
+import { t, tr } from "@/lib/i18n";
+import { Portrait } from "./Portrait";
 
 export function CharacterSelect() {
+  useLang();
   const session = useSession();
+  const g = useGame();
   const [hover, setHover] = useState<CharacterId>("naruto");
   const h = CHARACTERS[hover];
-  const foe = CHARACTERS[bossFor(hover)];
+  const foe = g.mode === "quick" ? CHARACTERS[bossFor(hover)] : null;
 
   const choose = (id: CharacterId) => {
     session.sfx.unlock();
     session.sfx.select();
-    session.dispatch({ type: "SELECT_CHARACTER", id });
+    session.dispatch({ type: "SELECT_CHARACTER", id, bossId: g.mode === "quick" ? randomBossFor(id) : undefined });
   };
 
   return (
     <div className="select-overlay char-overlay">
       <div className="select-title">
-        <span>STEP 1</span>
-        CHOOSE YOUR SHINOBI
+        <span>{t("step1Label")}</span>
+        {t("chooseShinobi")}
       </div>
       <div className="char-preview" style={{ ["--hero" as string]: h.color }}>
-        <img src={h.image} alt="" className="char-preview-img" key={h.id} />
+        <Portrait ch={h} className="char-preview-img" key={h.id} />
         <div className="char-preview-info">
-          <div className="cp-name">{h.name.toUpperCase()}</div>
-          <div className="cp-title">{h.title}</div>
-          <div className="cp-perk">{h.perk}</div>
-          <div className="cp-vs">
-            VS <b>{foe.name.toUpperCase()}</b> · {foe.title}
-          </div>
+          <div className="cp-name">{tr(h.name).toUpperCase()}</div>
+          <div className="cp-title">{tr(h.title)}</div>
+          <div className="cp-perk">{tr(h.perk)}</div>
+          {foe && (
+            <div className="cp-vs">
+              {t("vs")} <b>?</b>
+            </div>
+          )}
         </div>
       </div>
       <div className="char-grid">
-        {CHARACTER_LIST.map((c) => (
+        {PLAYABLE.map((c) => (
           <button
             key={c.id}
             className={`char-card ${hover === c.id ? "active" : ""}`}
@@ -44,12 +51,15 @@ export function CharacterSelect() {
             onClick={() => choose(c.id)}
             data-character={c.id}
           >
-            <img src={c.image} alt={c.name} loading="eager" draggable={false} />
-            <span className="cc-name">{c.name}</span>
-            {c.villain && <span className="cc-tag">{c.tag ?? "ROGUE"}</span>}
+            <Portrait ch={c} className="char-card-img" />
+            <span className="cc-name">{tr(c.name)}</span>
+            {c.tag && <span className={`cc-tag ${c.villain ? "rogue" : ""}`}>{tr(c.tag)}</span>}
           </button>
         ))}
       </div>
+      <button className="btn ghost small" onClick={() => session.dispatch({ type: "BACK_TO_MENU" })}>
+        {t("backToMenu")}
+      </button>
     </div>
   );
 }

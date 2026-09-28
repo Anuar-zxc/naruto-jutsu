@@ -17,6 +17,10 @@ import { Sfx } from "@/lib/audio/sfx";
 import { CorrectionStabilizer, MIN_PALM_SIZE } from "@/lib/vision/correctionEngine";
 import { SIGNS } from "@/lib/vision/gestureDefinitions";
 import type { GestureRecognizer } from "@/lib/vision/gestureRecognizer";
+import { getLang, t as tt, tr } from "@/lib/i18n";
+import { CHAPTERS } from "./story";
+
+const LS_PROGRESS = "shinobi.progress";
 
 export type FeedbackTone = "hint" | "error";
 
@@ -95,6 +99,42 @@ export class GameSession {
     this.liveSubs.add(fn);
     return () => this.liveSubs.delete(fn);
   };
+
+  // --- story progress (chapters cleared), persisted per browser ------------
+  private progress = 0;
+  private progressSubs = new Set<() => void>();
+  getProgress = () => this.progress;
+  subscribeProgress = (fn: () => void) => {
+    this.progressSubs.add(fn);
+    return () => this.progressSubs.delete(fn);
+  };
+  loadProgress() {
+    try {
+      const n = Number(localStorage.getItem(LS_PROGRESS) ?? 0);
+      this.progress = Number.isFinite(n) ? Math.max(0, Math.min(CHAPTERS.length, n)) : 0;
+    } catch {
+      this.progress = 0;
+    }
+    this.progressSubs.forEach((f) => f());
+  }
+  saveProgress(cleared: number) {
+    this.progress = Math.max(this.progress, Math.min(CHAPTERS.length, cleared));
+    try {
+      localStorage.setItem(LS_PROGRESS, String(this.progress));
+    } catch {
+      /* storage unavailable */
+    }
+    this.progressSubs.forEach((f) => f());
+  }
+  resetProgress() {
+    this.progress = 0;
+    try {
+      localStorage.removeItem(LS_PROGRESS);
+    } catch {
+      /* ignore */
+    }
+    this.progressSubs.forEach((f) => f());
+  }
 
   attachRecognizer(r: GestureRecognizer) {
     this.recognizer = r;
@@ -176,6 +216,7 @@ export class GameSession {
         break;
       case "VICTORY":
         this.schedule(250, () => this.sfx.victory());
+        if (this.state.mode === "story" && this.state.chapter != null) this.saveProgress(this.state.chapter + 1);
         break;
     }
   }
@@ -214,13 +255,8 @@ export class GameSession {
       } else {
         this.twoHandsSince = null;
         calibration = 0;
-        const message =
-          hands.length === 0
-            ? "Place both hands inside the frame."
-            : hands.length === 1
-              ? "Show both hands."
-              : "Move closer to the camera.";
-        this.setFeedback({ tone: "hint", title: "CAMERA CHECK", message, key: `cal:${message}` });
+        const message = tt(hands.length === 0 ? "placeHands" : hands.length === 1 ? "showBoth" : "moveCloser");
+        this.setFeedback({ tone: "hint", title: tt("cameraCheck"), message, key: `cal:${message}` });
       }
     } else if (s.phase === "PLAYING" && s.jutsuId) {
       expected = this.handlePlaying(frame, t);
@@ -280,13 +316,14 @@ export class GameSession {
     const raw = this.recognizer?.getCorrection(expected, frame.features) ?? null;
     const corr = justFailed ? this.stabilizer.force(raw, t) : this.stabilizer.update(raw, t);
     const exp = SIGNS[expected];
+    const lang = getLang();
 
     if (t < this.errorUntil && this.errorSign) {
       this.setFeedback({
         tone: "error",
-        title: `INCORRECT — THAT'S ${SIGNS[this.errorSign].name.toUpperCase()}`,
-        message: corr?.message ?? `${exp.name}: ${exp.howTo}.`,
-        key: `err:${this.errorSign}:${corr?.key ?? ""}`,
+        title: tt("incorrect", { sign: tr(SIGNS[this.errorSign].name).toUpperCase() }),
+        message: corr ? tr(corr.text) : `${tr(exp.name)}: ${tr(exp.howTo)}.`,
+        key: `err:${lang}:${this.errorSign}:${corr?.key ?? ""}`,
       });
       this.overlay.tone = "error";
       this.overlay.highlight = corr?.highlight ?? null;
@@ -295,7 +332,7 @@ export class GameSession {
       this.overlay.tone = "good";
       this.overlay.highlight = null;
     } else if (corr && (t - this.lastProgressAt > TIMING.hintDelay || corr.kind === "hands")) {
-      this.setFeedback({ tone: "hint", title: "ADJUST", message: corr.message, key: `hint:${corr.key}` });
+      this.setFeedback({ tone: "hint", title: tt("adjust"), message: tr(corr.text), key: `hint:${lang}:${corr.key}` });
       this.overlay.tone = "hint";
       this.overlay.highlight = corr.highlight ?? null;
     } else {

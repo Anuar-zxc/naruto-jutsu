@@ -35,53 +35,49 @@ Camera (getUserMedia, mirrored)
 
 The hot path runs **outside React**. Each camera frame goes tracker → recognizer → `GameSession` → canvas overlay. React only re-renders on game-state changes plus a live HUD capped at about 12 updates per second.
 
-## Gestures
+## The 12 zodiac seals
 
-Every seal is a pair of hand shapes, plus in some cases a rule about how far apart the hands are or which way the fingers point. The pictograms in the game are generated from these same definitions, so the picture always matches what the classifier expects.
+Real seals interlock the fingers of both hands. A webcam tracker can't see fingers hidden behind the other hand, so each seal is a **camera-readable approximation**: one hand shape per hand, plus how the hands relate to each other (distance, height, direction). Where possible it keeps the look of the real seal. Every pair of seals differs in at least one clearly visible feature. The pictograms in the game are generated from the same definitions the classifier uses.
 
-| Seal | Kanji | How to make it | Rule set | Used in |
-| --- | --- | --- | --- | --- |
-| Tiger | 寅 | Both hands: index + middle up, hands together | PEACE + PEACE, distance ≤ 2.6 palms, fingers up | Fire, Lightning |
-| Ram | 未 | Both hands: only index fingers up | INDEX + INDEX, fingers up | Fire, Lightning |
-| Snake | 巳 | Two fists close together | FIST + FIST, distance ≤ 2.6 | Fire, Lightning |
-| Horse | 午 | Both palms open, side by side | OPEN + OPEN, distance ≤ 2.6 | Fire |
-| Monkey | 申 | Both palms open, arms spread wide | OPEN + OPEN, distance ≥ 3.4 | Water |
-| Dragon | 辰 | Both hands: index + pinky up ("horns") | HORNS + HORNS | Water, Lightning |
-| Ox | 丑 | One open palm + one fist | OPEN + FIST (either hand) | Water |
-| Bird | 酉 | One open palm + one index finger up | OPEN + INDEX (either hand) | Water, Lightning |
-
-| Jutsu | Sequence | Damage | Time |
+| Seal | Kanji | How to make it | Rules |
 | --- | --- | --- | --- |
-| 火遁 Fire Style: Ember Tiger Blast | Tiger → Ram → Snake → Horse | 300 | 16 s |
-| 水遁 Water Style: Tidal Serpent | Ox → Monkey → Dragon → Bird | 350 | 18 s |
-| 雷遁 Lightning Style: Thunder Fang | Ram → Dragon → Tiger → Snake → Bird | 450 | 20 s |
+| Rat | 子 | index + middle up · other hand a fist, close | PEACE + FIST, together |
+| Ox | 丑 | open palm and fist side by side | OPEN + FIST, same height |
+| Tiger | 寅 | both hands index + middle up, together | PEACE + PEACE, together, up |
+| Rabbit | 卯 | index up · other hand a fist | INDEX + FIST |
+| Dragon | 辰 | both hands "horns" (index + pinky) | HORNS + HORNS |
+| Snake | 巳 | two fists clasped close | FIST + FIST, together |
+| Horse | 午 | both index fingers up, touching | INDEX + INDEX, together, up |
+| Ram | 未 | index + middle · other hand index only | PEACE + INDEX |
+| Monkey | 申 | both palms open, fingers up | OPEN + OPEN, up |
+| Bird | 酉 | open palm · other hand index up | OPEN + INDEX |
+| Dog | 戌 | open palm held **above** a fist | OPEN over FIST |
+| Boar | 亥 | both palms open, fingers **down** | OPEN + OPEN, down |
 
-Each accepted seal triggers its own action (a sealed step, a kanji burst in the element's colour, points and combo), and each completed jutsu triggers a different attack (fire arc, water serpent, lightning bolt).
+## Jutsu — real seal sequences
 
-Sounds are synthesised with the Web Audio API, so the game ships no audio files.
+The sequences come from fan seal guides for the series (sources vary on some of them). The Water Dragon is 44 seals long in the series, so the game uses its first six.
 
-## Characters & stages
+| Jutsu | Seals | Element |
+| --- | --- | --- |
+| Transformation (Henge) | Dog → Boar → Tiger | chakra |
+| Body Replacement (Kawarimi) | Tiger → Boar → Ox → Snake | chakra |
+| Shadow Clone (Kage Bunshin) | Ram → Snake → Tiger | chakra |
+| Fire Style: Great Fireball (Gōkakyū) | Snake → Ram → Monkey → Boar → Horse → Tiger | fire |
+| Chidori | Ox → Rabbit → Monkey | lightning |
+| Fire Style: Dragon Flame (Ryūka) | Snake → Dragon → Rabbit → Tiger | fire |
+| Water Style: Water Dragon (Suiryūdan), abridged | Ox → Monkey → Rabbit → Rat → Boar → Bird | water |
+| Fire Style: Phoenix Flower (Hōsenka) | Rat → Tiger → Dog → Ox → Rabbit → Tiger | fire |
+| Summoning (Kuchiyose) | Boar → Dog → Bird → Monkey → Ram | chakra |
 
-| Shinobi | Perk |
-| --- | --- |
-| Naruto | +3 s on every jutsu |
-| Sakura | +10% damage to all jutsu |
-| Kakashi | +25% Lightning damage |
-| Sasuke | +15% Lightning, +15% Fire |
-| Itachi | +25% Fire damage |
-| Minato | +4 s on every jutsu |
-| Hashirama | +25% Water damage |
-| Madara | +20% Fire, +2 s |
-| Obito | +2 s, +10% all damage |
-| Obito (Six Paths) | +20% all damage, −2 s |
+Damage and time scale with the number of seals: 3 seals give 220 damage in 13 s, 6 seals give 460 damage in 22 s.
 
-The boss is chosen automatically from Madara → Obito (Six Paths) → Itachi → Obito, skipping the character you picked. The stages rotate each round: Hidden Leaf Village → Valley of the End → Ninja Academy. The artwork lives in `public/assets/`; it was cut out of its background and converted to WebP (about 1.1 MB in total).
+## Modes, story and characters
 
-## Credits & licence
-
-Character and background artwork is used with permission from the rights holder, obtained by the project author. The permission covers this project only, and the artwork is **not** covered by the code licence. Keep a copy of the permission letter with the submission.
-
-All code, the gesture-recognition system, the seal pictograms, effects and sounds are original to this project.
+- **Story:** 12 chapters across 9 locations and 11 villains: Kisame, Hidan, Itachi, Konan, Pain, Obito, Obito (Ten-Tails), Madara, Madara (Six Paths), Kawaki and Isshiki. Chapter 1 is a sparring match with the mentor. Each chapter has visual-novel dialogue before and after the fight (typewriter text, active-speaker highlight; skip with Esc or the button). A villain taunts you when their HP drops below half. New jutsu unlock as you progress, and progress is saved in the browser.
+- **Quick battle:** every jutsu unlocked, against a random villain. Takes about 2 minutes, which makes it the best mode for a demo.
+- **24 playable characters**, each with a perk (extra time, or a damage bonus to an element or to everything). If you fight as a villain who is also the chapter boss, you face their "Shadow".
+- **Russian / English:** the whole UI switches with the RU / EN toggle, including every Error Mode correction ("Выпрями средние пальцы на обеих руках."). The language is detected automatically and remembered.
 
 ## Error Mode
 
@@ -93,6 +89,7 @@ Error Mode is in `src/lib/vision/correctionEngine.ts`. It runs on every frame ag
 
 | Rule | Detects | Example message |
 | --- | --- | --- |
+| stack | wrong height (Dog, Ox) | "Raise your open palm higher, above your fist." |
 | hands | hand missing / out of frame | "Show both hands — your left hand is out of view." |
 | size | hands too small (too far from camera) | "Move closer to the camera." |
 | shape | ≥ 3 wrong fingers on one hand | "Close both hands into fists." / "Open your right hand — spread all fingers." |
@@ -167,7 +164,7 @@ npm run dev        # http://localhost:3000
 Other commands:
 
 ```bash
-npm test           # 34 tests: features, all 8 seals, smoothing, every correction path, game flow
+npm test           # 41 tests: features, all 12 seals, smoothing, every correction path, story + quick game flow
 npm run typecheck
 npm run build && npm start
 ```
@@ -193,7 +190,7 @@ If the build machine can't reach Google Storage, the app loads the model from Go
 
 - ✅ **Real-time webcam tracking.** MediaPipe HandLandmarker at camera frame rate (about 30 FPS on laptops), tracking two hands.
 - ✅ **Browser-only.** No installs, plugins or backend. WASM + WebGL/CPU run inside the page.
-- ✅ **3+ gestures.** 8 distinct seals, each with its own in-game action, plus 3 jutsu with different attacks.
+- ✅ **3+ gestures.** All 12 zodiac seals, each with its own in-game action, plus 9 jutsu with their real seal orders and four attack styles.
 - ✅ **Error Mode with concrete corrections.** Finger-, hand-, distance- and orientation-level instructions, one at a time, with the wrong finger highlighted on the skeleton.
 - ✅ **Custom gesture logic.** MediaPipe only provides landmarks. Normalisation, classification, confidence, smoothing and corrections are all our own code (`src/lib/vision`). No pre-built gesture recogniser and no trained model.
 - ✅ Visual recognition feedback: live skeleton, detected seal, confidence and hold progress.
@@ -208,4 +205,4 @@ If the build machine can't reach Google Storage, the app loads the model from Go
 - Light your hands from the front and avoid a bright window behind you.
 - Sit about 50–100 cm from a laptop webcam, with both hands and forearms in frame.
 - Hold each seal for a moment. It's accepted after about a quarter of a second of stable detection.
-- To show off Error Mode, make Snake (two fists) when the game asks for Ram. It will say "INCORRECT — THAT'S SNAKE · Extend your index fingers."
+- To show off Error Mode, pick Chidori and make Snake (two fists) when the game asks for Rabbit. It will say "INCORRECT — THAT'S SNAKE · Raise your … index finger."

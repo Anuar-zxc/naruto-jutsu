@@ -1,11 +1,15 @@
 import type { SignId } from "./gestures";
 import type { CharacterId } from "@/lib/game/characters";
+import type { L } from "./i18n";
 
 export type Phase =
   | "IDLE"
   | "CAMERA_CHECK"
   | "READY"
+  | "MODE_SELECT"
   | "CHARACTER_SELECT"
+  | "CHAPTER_SELECT"
+  | "DIALOGUE"
   | "JUTSU_SELECTION"
   | "COUNTDOWN"
   | "PLAYING"
@@ -15,15 +19,16 @@ export type Phase =
   | "FAILED"
   | "VICTORY";
 
-export type Element = "fire" | "water" | "lightning";
-export type JutsuId = "FIRE" | "WATER" | "LIGHTNING";
+export type Element = "fire" | "water" | "lightning" | "chakra";
+export type JutsuId = "HENGE" | "KAWARIMI" | "KAGE_BUNSHIN" | "GOKAKYU" | "CHIDORI" | "RYUKA" | "SUIRYUDAN" | "HOSENKA" | "KUCHIYOSE";
+export type GameMode = "story" | "quick";
 
 export interface Jutsu {
   id: JutsuId;
   element: Element;
-  /** e.g. "Fire Style" */
-  style: string;
-  name: string;
+  name: L;
+  /** Original Japanese name, romanised. */
+  romaji: string;
   kanji: string;
   sequence: SignId[];
   damage: number;
@@ -31,6 +36,8 @@ export interface Jutsu {
   difficulty: 1 | 2 | 3;
   color: string;
   glow: string;
+  /** e.g. "abridged: first 6 of 44 seals" */
+  note?: L;
 }
 
 export interface GameStats {
@@ -58,8 +65,12 @@ export interface CastResult {
 export interface GameState {
   phase: Phase;
   round: number;
+  mode: GameMode;
   characterId: CharacterId | null;
   bossId: CharacterId | null;
+  /** Story chapter index (0-based), null in quick battle. */
+  chapter: number | null;
+  dialogue: { part: "intro" | "outro"; index: number } | null;
   bossHp: number;
   bossMaxHp: number;
   jutsuId: JutsuId | null;
@@ -79,7 +90,14 @@ export type GameAction =
   | { type: "START" }
   | { type: "CAMERA_READY" }
   | { type: "ENTER_SELECTION" }
-  | { type: "SELECT_CHARACTER"; id: CharacterId }
+  | { type: "SELECT_MODE"; mode: GameMode }
+  | { type: "SELECT_CHAPTER"; index: number }
+  | { type: "DIALOGUE_NEXT" }
+  | { type: "DIALOGUE_SKIP" }
+  | { type: "STORY_OUTRO" }
+  | { type: "BACK_TO_CHAPTERS" }
+  | { type: "BACK_TO_MENU" }
+  | { type: "SELECT_CHARACTER"; id: CharacterId; bossId?: CharacterId }
   | { type: "CHANGE_CHARACTER" }
   | { type: "SELECT_JUTSU"; id: JutsuId }
   | { type: "COUNTDOWN_TICK" }

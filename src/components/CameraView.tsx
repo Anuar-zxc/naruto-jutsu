@@ -3,7 +3,9 @@
 import type { RefObject } from "react";
 import { useGame, useLive } from "@/hooks/useGame";
 import type { TrackingStatus } from "@/hooks/useHandTracking";
-import { CAMERA_ERROR_TEXT, type CameraErrorKind } from "@/lib/vision/handTracker";
+import type { CameraErrorKind } from "@/lib/vision/handTracker";
+import { t } from "@/lib/i18n";
+import { useLang } from "@/hooks/useLang";
 import { GestureIndicator, HandsBadge } from "./GestureIndicator";
 import { ErrorFeedback } from "./ErrorFeedback";
 
@@ -18,6 +20,7 @@ interface Props {
 }
 
 export function CameraView({ videoRef, canvasRef, panelRef, status, error, retry, synthetic }: Props) {
+  useLang();
   const game = useGame();
   const live = useLive();
   const phase = game.phase;
@@ -40,39 +43,35 @@ export function CameraView({ videoRef, canvasRef, panelRef, status, error, retry
           <ErrorFeedback />
         </>
       )}
-      {synthetic && <div className="synthetic-tag">DEV · SYNTHETIC INPUT (keys 1–8)</div>}
+      {synthetic && <div className="synthetic-tag">{t("syntheticTag")}</div>}
 
       {status === "loading" && (
         <div className="camera-center">
           <div className="spinner" />
-          <div className="camera-msg">Summoning the camera…</div>
-          <div className="camera-sub">Allow camera access when your browser asks. Video never leaves your device.</div>
+          <div className="camera-msg">{t("loading")}</div>
+          <div className="camera-sub">{t("loadingSub")}</div>
         </div>
       )}
 
       {status === "error" && error && (
         <div className="camera-center error">
           <div className="big-icon">⛩</div>
-          <div className="camera-msg">{CAMERA_ERROR_TEXT[error]}</div>
-          <div className="camera-sub">
-            {error === "denied"
-              ? "Click the camera icon in your browser's address bar, allow access, then try again."
-              : "Close other apps using the camera, then try again."}
-          </div>
+          <div className="camera-msg">{t(`err_${error}`)}</div>
+          <div className="camera-sub">{error === "denied" ? t("errSubDenied") : t("errSubOther")}</div>
           <button className="btn" onClick={retry}>
-            TRY AGAIN
+            {t("tryAgain")}
           </button>
         </div>
       )}
 
       {status === "running" && phase === "CAMERA_CHECK" && (
         <div className="calibration">
-          <div className="calib-title">CAMERA CHECK</div>
+          <div className="calib-title">{t("cameraCheck")}</div>
           <div className="calib-hands">
             <span className={live.hands >= 1 ? "on" : ""}>✋</span>
             <span className={live.hands >= 2 ? "on" : ""}>✋</span>
           </div>
-          <div className="calib-msg">{live.calibration > 0 ? "Hold still…" : "Place both hands inside the frame."}</div>
+          <div className="calib-msg">{live.calibration > 0 ? t("holdStill") : t("placeHands")}</div>
           <div className="calib-bar">
             <div className="calib-fill" style={{ width: `${live.calibration * 100}%` }} />
           </div>
@@ -82,7 +81,7 @@ export function CameraView({ videoRef, canvasRef, panelRef, status, error, retry
       {phase === "READY" && (
         <div className="stamp">
           <div className="stamp-kanji">忍</div>
-          <div className="stamp-text">SHINOBI DETECTED</div>
+          <div className="stamp-text">{t("shinobiDetected")}</div>
         </div>
       )}
 
