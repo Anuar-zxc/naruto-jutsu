@@ -3,6 +3,7 @@
 import { forwardRef } from "react";
 import { BOSS } from "@/lib/game/jutsu";
 import { HealthBar } from "./HealthBar";
+import { ArenaBackdrop, STAGE_NAMES, type Stage } from "./ArenaBackdrop";
 
 interface Props {
   hp: number;
@@ -12,12 +13,15 @@ interface Props {
   damage: { amount: number; perfect: boolean; key: number } | null;
   defeated: boolean;
   hpDelayMs: number;
+  stage: Stage;
 }
 
 /** KAGE-ONI — an original shadow-demon design drawn in SVG. */
-export const Boss = forwardRef<HTMLDivElement, Props>(function Boss({ hp, maxHp, hitKey, damage, defeated, hpDelayMs }, ref) {
+export const Boss = forwardRef<HTMLDivElement, Props>(function Boss({ hp, maxHp, hitKey, damage, defeated, hpDelayMs, stage }, ref) {
   return (
     <div className="arena">
+      <ArenaBackdrop key={stage} stage={stage} />
+      <div className="stage-name">{STAGE_NAMES[stage]}</div>
       <div className="boss-head">
         <div className="boss-name">
           <span className="boss-kanji">{BOSS.kanji}</span>

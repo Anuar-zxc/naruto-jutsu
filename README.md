@@ -57,7 +57,7 @@ Every seal is a pair of hand shapes, plus in some cases a rule about how far apa
 
 Each accepted seal triggers its own action (a sealed step, a kanji burst in the element's colour, points and combo), and each completed jutsu triggers a different attack (fire arc, water serpent, lightning bolt).
 
-The seal names are inspired by the zodiac hand seals of ninja fiction. The shapes, UI, boss, effects and sounds are all original. Sounds are synthesised with the Web Audio API, so the game ships no audio or image assets.
+The seal names are inspired by the zodiac hand seals of ninja fiction. The shapes, UI, boss, effects and sounds are all original. Sounds are synthesised with the Web Audio API, and the three arena backgrounds (Ember Ridge, Moon Bamboo Grove, Storm Shrine — one per round) are hand-drawn inline SVG, so the game ships no audio or image assets.
 
 ## Error Mode
 

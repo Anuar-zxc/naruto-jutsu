@@ -10,6 +10,7 @@ import { comboMultiplier } from "@/lib/game/combo";
 import { SIGNS } from "@/lib/vision/gestureDefinitions";
 import type { GameState } from "@/types/game";
 import { Boss } from "./Boss";
+import { ArenaBackdrop, stageForRound } from "./ArenaBackdrop";
 import { CameraView } from "./CameraView";
 import { CurrentSeal } from "./CurrentSeal";
 import { DebugOverlay } from "./DebugOverlay";
@@ -170,9 +171,13 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
   const j = g.jutsuId ? JUTSU[g.jutsuId] : null;
   const casting = g.phase === "SUCCESS" || g.phase === "JUTSU_CAST";
   const hpDelay = g.phase === "JUTSU_CAST" ? TIMING.castImpact : 0;
+  const stage = stageForRound(g.round);
 
   return (
     <div ref={rootRef} className="game" style={j ? { ["--el" as string]: j.color, ["--el-glow" as string]: j.glow } : undefined}>
+      <div className="game-bg">
+        <ArenaBackdrop key={stage} stage={stage} />
+      </div>
       <GameHUD muted={muted} onToggleMute={toggleMute} debug={debug} onToggleDebug={() => setDebug((d) => !d)} onQuit={quit} />
 
       <div className="game-main">
@@ -196,7 +201,7 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
         </section>
 
         <section className="col-side">
-          <Boss ref={bossRef} hp={g.bossHp} maxHp={g.bossMaxHp} hitKey={hitKey} damage={damage} defeated={g.phase === "VICTORY"} hpDelayMs={hpDelay} />
+          <Boss ref={bossRef} hp={g.bossHp} maxHp={g.bossMaxHp} hitKey={hitKey} damage={damage} defeated={g.phase === "VICTORY"} hpDelayMs={hpDelay} stage={stage} />
           <CurrentSeal />
           {(g.phase === "CAMERA_CHECK" || g.phase === "READY") && (
             <div className="side-note">
