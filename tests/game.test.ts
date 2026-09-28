@@ -33,7 +33,7 @@ async function main() {
   });
 
   await test("full reducer flow: select → countdown → seals → cast → damage", () => {
-    let s = reduce(initialGameState(), { type: "START" }, { type: "CAMERA_READY" }, { type: "ENTER_SELECTION" }, { type: "SELECT_JUTSU", id: "FIRE" });
+    let s = reduce(initialGameState(), { type: "START" }, { type: "CAMERA_READY" }, { type: "ENTER_SELECTION" }, { type: "SELECT_CHARACTER", id: "hashirama" }, { type: "SELECT_JUTSU", id: "FIRE" });
     assert.equal(s.phase, "COUNTDOWN");
     s = reduce(s, { type: "COUNTDOWN_TICK" }, { type: "COUNTDOWN_TICK" }, { type: "COUNTDOWN_TICK" });
     assert.equal(s.phase, "PLAYING");
@@ -56,7 +56,7 @@ async function main() {
   });
 
   await test("mistake resets combo and removes perfect bonus", () => {
-    let s = reduce(initialGameState(), { type: "START" }, { type: "CAMERA_READY" }, { type: "ENTER_SELECTION" }, { type: "SELECT_JUTSU", id: "FIRE" }, { type: "COUNTDOWN_TICK" }, { type: "COUNTDOWN_TICK" }, { type: "COUNTDOWN_TICK" });
+    let s = reduce(initialGameState(), { type: "START" }, { type: "CAMERA_READY" }, { type: "ENTER_SELECTION" }, { type: "SELECT_CHARACTER", id: "hashirama" }, { type: "SELECT_JUTSU", id: "FIRE" }, { type: "COUNTDOWN_TICK" }, { type: "COUNTDOWN_TICK" }, { type: "COUNTDOWN_TICK" });
     s = reduce(s, { type: "SIGN", sign: "TIGER" }, { type: "MISTAKE", sign: "SNAKE" });
     assert.equal(s.stats.combo, 0);
     assert.equal(s.stats.mistakes, 1);
@@ -68,7 +68,7 @@ async function main() {
   });
 
   await test("timer expiry → FAILED, retry restarts the same jutsu", () => {
-    let s = reduce(initialGameState(), { type: "START" }, { type: "CAMERA_READY" }, { type: "ENTER_SELECTION" }, { type: "SELECT_JUTSU", id: "WATER" }, { type: "COUNTDOWN_TICK" }, { type: "COUNTDOWN_TICK" }, { type: "COUNTDOWN_TICK" });
+    let s = reduce(initialGameState(), { type: "START" }, { type: "CAMERA_READY" }, { type: "ENTER_SELECTION" }, { type: "SELECT_CHARACTER", id: "hashirama" }, { type: "SELECT_JUTSU", id: "WATER" }, { type: "COUNTDOWN_TICK" }, { type: "COUNTDOWN_TICK" }, { type: "COUNTDOWN_TICK" });
     s = reduce(s, { type: "SIGN", sign: "OX" }, { type: "TICK", dt: 20000 });
     assert.equal(s.phase, "FAILED");
     assert.equal(s.stats.failedCount, 1);
@@ -78,6 +78,22 @@ async function main() {
     assert.equal(s.timeLeftMs, JUTSU.WATER.timeLimitMs);
   });
 
+  await test("character perks: time bonus, element damage, boss never equals hero", () => {
+    const base = reduce(initialGameState(), { type: "START" }, { type: "CAMERA_READY" }, { type: "ENTER_SELECTION" });
+    const naruto = reduce(base, { type: "SELECT_CHARACTER", id: "naruto" }, { type: "SELECT_JUTSU", id: "FIRE" });
+    assert.equal(naruto.timeLeftMs, JUTSU.FIRE.timeLimitMs + 3000);
+    let itachi = reduce(base, { type: "SELECT_CHARACTER", id: "itachi" });
+    assert.equal(itachi.bossId, "madara");
+    assert.equal(reduce(base, { type: "SELECT_CHARACTER", id: "madara" }).bossId, "obito-six-paths");
+    itachi = reduce(itachi, { type: "SELECT_JUTSU", id: "FIRE" }, { type: "COUNTDOWN_TICK" }, { type: "COUNTDOWN_TICK" }, { type: "COUNTDOWN_TICK" });
+    for (const sign of JUTSU.FIRE.sequence) itachi = reduce(itachi, { type: "SIGN", sign });
+    itachi = reduce(itachi, { type: "SUCCESS_DONE" });
+    assert.equal(itachi.lastCast?.damage, Math.round(300 * 1.25 * 1.25));
+    const again = reduce({ ...itachi, phase: "VICTORY" }, { type: "RESTART" });
+    assert.equal(again.characterId, "itachi");
+    assert.equal(again.bossHp, 1000);
+  });
+
   await test("illegal actions are ignored", () => {
     const s = initialGameState();
     assert.equal(gameReducer(s, { type: "SIGN", sign: "TIGER" }), s);
@@ -85,7 +101,7 @@ async function main() {
   });
 
   await test("boss defeated → VICTORY; ranks", () => {
-    let s = reduce(initialGameState(), { type: "START" }, { type: "CAMERA_READY" }, { type: "ENTER_SELECTION" });
+    let s = reduce(initialGameState(), { type: "START" }, { type: "CAMERA_READY" }, { type: "ENTER_SELECTION" }, { type: "SELECT_CHARACTER", id: "hashirama" });
     for (const id of ["LIGHTNING", "LIGHTNING"] as const) {
       s = reduce(s, { type: "SELECT_JUTSU", id }, { type: "COUNTDOWN_TICK" }, { type: "COUNTDOWN_TICK" }, { type: "COUNTDOWN_TICK" });
       for (const sign of JUTSU[id].sequence) s = reduce(s, { type: "TICK", dt: 2000 }, { type: "SIGN", sign });
@@ -122,9 +138,12 @@ async function main() {
 
     session.dispatch({ type: "START" });
     await hold("HORSE", 300);
-    assert.equal(session.getState().phase === "READY" || session.getState().phase === "JUTSU_SELECTION", true, session.getState().phase);
+    assert.equal(["READY", "CHARACTER_SELECT"].includes(session.getState().phase), true, session.getState().phase);
     await sleep(60);
+    assert.equal(session.getState().phase, "CHARACTER_SELECT");
+    session.dispatch({ type: "SELECT_CHARACTER", id: "hashirama" });
     assert.equal(session.getState().phase, "JUTSU_SELECTION");
+    assert.equal(session.getState().bossId, "madara");
     session.dispatch({ type: "SELECT_JUTSU", id: "FIRE" });
     await sleep(120);
     assert.equal(session.getState().phase, "PLAYING");

@@ -49,8 +49,5 @@ export const JUTSU: Record<JutsuId, Jutsu> = {
 export const JUTSU_LIST: Jutsu[] = Object.values(JUTSU);
 
 export const BOSS = {
-  name: "KAGE-ONI",
-  title: "The Hollow Shadow",
-  kanji: "影鬼",
   maxHp: 1000,
 };

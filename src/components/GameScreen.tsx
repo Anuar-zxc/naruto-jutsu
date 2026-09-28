@@ -4,13 +4,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useGame, useSession } from "@/hooks/useGame";
 import { useHandTracking } from "@/hooks/useHandTracking";
 import { FxEngine } from "@/lib/fx/fxEngine";
-import { BOSS, JUTSU } from "@/lib/game/jutsu";
+import { JUTSU } from "@/lib/game/jutsu";
+import { CHARACTERS } from "@/lib/game/characters";
 import { TIMING } from "@/lib/game/session";
 import { comboMultiplier } from "@/lib/game/combo";
 import { SIGNS } from "@/lib/vision/gestureDefinitions";
 import type { GameState } from "@/types/game";
 import { Boss } from "./Boss";
-import { ArenaBackdrop, stageForRound } from "./ArenaBackdrop";
+import { ArenaBackdrop } from "./ArenaBackdrop";
+import { CharacterSelect } from "./CharacterSelect";
 import { CameraView } from "./CameraView";
 import { CurrentSeal } from "./CurrentSeal";
 import { DebugOverlay } from "./DebugOverlay";
@@ -171,12 +173,12 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
   const j = g.jutsuId ? JUTSU[g.jutsuId] : null;
   const casting = g.phase === "SUCCESS" || g.phase === "JUTSU_CAST";
   const hpDelay = g.phase === "JUTSU_CAST" ? TIMING.castImpact : 0;
-  const stage = stageForRound(g.round);
+  const hero = g.characterId ? CHARACTERS[g.characterId] : null;
 
   return (
     <div ref={rootRef} className="game" style={j ? { ["--el" as string]: j.color, ["--el-glow" as string]: j.glow } : undefined}>
       <div className="game-bg">
-        <ArenaBackdrop key={stage} stage={stage} />
+        <ArenaBackdrop round={g.round} showName={false} />
       </div>
       <GameHUD muted={muted} onToggleMute={toggleMute} debug={debug} onToggleDebug={() => setDebug((d) => !d)} onQuit={quit} />
 
@@ -201,11 +203,11 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
         </section>
 
         <section className="col-side">
-          <Boss ref={bossRef} hp={g.bossHp} maxHp={g.bossMaxHp} hitKey={hitKey} damage={damage} defeated={g.phase === "VICTORY"} hpDelayMs={hpDelay} stage={stage} />
+          <Boss ref={bossRef} bossId={g.bossId} round={g.round} hp={g.bossHp} maxHp={g.bossMaxHp} hitKey={hitKey} damage={damage} defeated={g.phase === "VICTORY"} hpDelayMs={hpDelay} />
           <CurrentSeal />
           {(g.phase === "CAMERA_CHECK" || g.phase === "READY") && (
             <div className="side-note">
-              <b>{BOSS.name}</b> blocks the path. Show both hands to the camera to begin the trial.
+              Show both hands to the camera to begin the trial. Then choose your shinobi — your enemy is waiting.
             </div>
           )}
         </section>
@@ -215,10 +217,12 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
         <JutsuSequence />
       </footer>
 
+      {g.phase === "CHARACTER_SELECT" && <CharacterSelect />}
       {g.phase === "JUTSU_SELECTION" && <JutsuSelect />}
       {g.phase === "FAILED" && <FailedPanel />}
       {casting && j && (
         <div className="cast-banner">
+          {hero && <img className="cb-hero" src={hero.image} alt="" />}
           <div className="cb-kanji">{j.kanji}</div>
           <div className="cb-title">{g.phase === "SUCCESS" ? "JUTSU CAST!" : j.name.toUpperCase()}</div>
           {g.phase === "JUTSU_CAST" && g.lastCast?.perfect && <div className="cb-perfect">PERFECT JUTSU · +{g.lastCast.perfectBonus}</div>}

@@ -11,11 +11,11 @@ export function pointsForSign(comboAfter: number) {
   return { amount: SIGN_POINTS * multiplier, multiplier };
 }
 
-export function castResult(jutsu: Jutsu, timeLeftMs: number, mistakes: number) {
+export function castResult(jutsu: Jutsu, timeLeftMs: number, mistakes: number, dmgMult = 1) {
   const perfect = mistakes === 0;
   const speedBonus = Math.round(Math.max(0, timeLeftMs) / 1000) * SPEED_BONUS_PER_SEC;
   const perfectBonus = perfect ? PERFECT_BONUS : 0;
-  const damage = Math.round(jutsu.damage * (perfect ? PERFECT_DAMAGE_MULT : 1));
+  const damage = Math.round(jutsu.damage * dmgMult * (perfect ? PERFECT_DAMAGE_MULT : 1));
   return { perfect, speedBonus, perfectBonus, damage };
 }
 

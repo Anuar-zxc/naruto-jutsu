@@ -2,6 +2,7 @@
 
 import { useGame } from "@/hooks/useGame";
 import { comboMultiplier } from "@/lib/game/combo";
+import { CHARACTERS } from "@/lib/game/characters";
 
 interface Props {
   muted: boolean;
@@ -14,12 +15,22 @@ interface Props {
 export function GameHUD({ muted, onToggleMute, debug, onToggleDebug, onQuit }: Props) {
   const g = useGame();
   const mult = comboMultiplier(g.stats.combo);
+  const hero = g.characterId ? CHARACTERS[g.characterId] : null;
   return (
     <header className="hud">
       <button className="hud-logo" onClick={onQuit} title="Back to title">
         <span className="logo-kanji">忍術</span>
         <span className="logo-text">SHINOBI</span>
       </button>
+      {hero && (
+        <div className="hud-hero" style={{ ["--hero" as string]: hero.color }} title={hero.perk}>
+          <img src={hero.image} alt="" />
+          <div>
+            <b>{hero.name.toUpperCase()}</b>
+            <span>{hero.perk}</span>
+          </div>
+        </div>
+      )}
       <div className="hud-stats">
         <div className="hud-stat">
           <span className="hud-k">ROUND</span>

@@ -2,6 +2,7 @@
 
 import { useGame, useSession } from "@/hooks/useGame";
 import { accuracy, rankFor, rankPoints } from "@/lib/game/scoring";
+import { CHARACTERS } from "@/lib/game/characters";
 
 const RANK_TEXT = { S: "LEGENDARY SHINOBI", A: "ELITE JŌNIN", B: "CHŪNIN", C: "GENIN — KEEP TRAINING" } as const;
 
@@ -10,6 +11,8 @@ export function ResultScreen({ onExit }: { onExit: () => void }) {
   const session = useSession();
   const s = g.stats;
   const rank = rankFor(s);
+  const hero = g.characterId ? CHARACTERS[g.characterId] : null;
+  const foe = g.bossId ? CHARACTERS[g.bossId] : null;
   const rows: [string, string][] = [
     ["SCORE", s.score.toLocaleString("en-US")],
     ["ACCURACY", `${Math.round(accuracy(s) * 100)}%`],
@@ -20,9 +23,10 @@ export function ResultScreen({ onExit }: { onExit: () => void }) {
   ];
   return (
     <div className="result">
+      {hero && <img className="result-hero" src={hero.image} alt="" />}
       <div className="result-card">
         <div className="result-head">VICTORY</div>
-        <div className="result-sub">Kage-Oni has been sealed.</div>
+        <div className="result-sub">{foe ? `${foe.name} has been defeated` : "The enemy has been defeated"}{hero ? ` by ${hero.name}.` : "."}</div>
         <div className={`rank rank-${rank}`}>{rank}</div>
         <div className="rank-text">
           {RANK_TEXT[rank]} · {rankPoints(s)} pts

@@ -12,11 +12,12 @@ A browser game where you cast jutsu by performing ninja-style hand seals in fron
 
 1. Open the link and click **ENTER THE SHINOBI TRIAL**.
 2. Allow the camera, then show both hands. The camera check confirms it can see them.
-3. Choose a jutsu (Fire, Water or Lightning). Each one is a sequence of 4–5 seals.
-4. Perform the seals before the timer runs out. Every seal lights up as it's accepted.
-5. Make a mistake and **Error Mode** names the problem and highlights the wrong finger in red on your skeleton.
-6. Finish the sequence and the jutsu hits **KAGE-ONI**, the shadow demon.
-7. Defeat it and you get your score, accuracy, max combo, time and an **S / A / B / C** rank.
+3. Choose your shinobi (10 characters, each with a perk). Your opponent is picked automatically.
+4. Choose a jutsu (Fire, Water or Lightning). Each one is a sequence of 4–5 seals.
+5. Perform the seals before the timer runs out. Every seal lights up as it's accepted.
+6. Make a mistake and **Error Mode** names the problem and highlights the wrong finger in red on your skeleton.
+7. Finish the sequence and the jutsu hits the enemy shinobi.
+8. Defeat them and you get your score, accuracy, max combo, time and an **S / A / B / C** rank.
 
 A full run takes about 1–2 minutes. Nothing is installed and nothing is uploaded: MediaPipe runs as WebAssembly inside the page, and video frames never leave the device.
 
@@ -57,7 +58,30 @@ Every seal is a pair of hand shapes, plus in some cases a rule about how far apa
 
 Each accepted seal triggers its own action (a sealed step, a kanji burst in the element's colour, points and combo), and each completed jutsu triggers a different attack (fire arc, water serpent, lightning bolt).
 
-The seal names are inspired by the zodiac hand seals of ninja fiction. The shapes, UI, boss, effects and sounds are all original. Sounds are synthesised with the Web Audio API, and the three arena backgrounds (Ember Ridge, Moon Bamboo Grove, Storm Shrine — one per round) are hand-drawn inline SVG, so the game ships no audio or image assets.
+Sounds are synthesised with the Web Audio API, so the game ships no audio files.
+
+## Characters & stages
+
+| Shinobi | Perk |
+| --- | --- |
+| Naruto | +3 s on every jutsu |
+| Sakura | +10% damage to all jutsu |
+| Kakashi | +25% Lightning damage |
+| Sasuke | +15% Lightning, +15% Fire |
+| Itachi | +25% Fire damage |
+| Minato | +4 s on every jutsu |
+| Hashirama | +25% Water damage |
+| Madara | +20% Fire, +2 s |
+| Obito | +2 s, +10% all damage |
+| Obito (Six Paths) | +20% all damage, −2 s |
+
+The boss is chosen automatically from Madara → Obito (Six Paths) → Itachi → Obito, skipping the character you picked. The stages rotate each round: Hidden Leaf Village → Valley of the End → Ninja Academy. The artwork lives in `public/assets/`; it was cut out of its background and converted to WebP (about 1.1 MB in total).
+
+## Credits & licence
+
+Character and background artwork is used with permission from the rights holder, obtained by the project author. The permission covers this project only, and the artwork is **not** covered by the code licence. Keep a copy of the permission letter with the submission.
+
+All code, the gesture-recognition system, the seal pictograms, effects and sounds are original to this project.
 
 ## Error Mode
 
@@ -101,7 +125,8 @@ src/
     ErrorFeedback      Error Mode banner
     JutsuSequence      ✓ / → / ○ seal strip + timer
     CurrentSeal        big "make this seal now" card with pictogram
-    Boss, HealthBar    original SVG demon, HP bar with ghost damage
+    CharacterSelect    roster with perks, automatic opponent
+    Boss, HealthBar    enemy artwork on the stage background, HP bar with ghost damage
     JutsuSelect, ResultScreen (+ FailedPanel), GameHUD, StartScreen, DebugOverlay
   hooks/
     useHandTracking    camera + tracker lifecycle, per-frame pump (refs, no state)
@@ -117,7 +142,8 @@ src/
     overlayRenderer    skeleton drawing with error highlighting
     syntheticHand / syntheticSource   dev-only synthetic input (see below)
   lib/game/
-    gameState          pure reducer: IDLE → CAMERA_CHECK → READY → JUTSU_SELECTION →
+    characters         roster, perks, boss order, stages
+    gameState          pure reducer: IDLE → CAMERA_CHECK → READY → CHARACTER_SELECT → JUTSU_SELECTION →
                        COUNTDOWN → PLAYING → SUCCESS → JUTSU_CAST → NEXT_ROUND/VICTORY, FAILED
     session            GameSession: frame → game events, timers, sounds, live HUD store
     jutsu, scoring, combo
@@ -141,7 +167,7 @@ npm run dev        # http://localhost:3000
 Other commands:
 
 ```bash
-npm test           # 33 tests: features, all 8 seals, smoothing, every correction path, game flow
+npm test           # 34 tests: features, all 8 seals, smoothing, every correction path, game flow
 npm run typecheck
 npm run build && npm start
 ```

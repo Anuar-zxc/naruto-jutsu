@@ -2,7 +2,7 @@
  * Game state machine — a pure reducer. No timers, no audio, no DOM:
  * side effects live in GameSession, rendering lives in React.
  *
- *   IDLE → CAMERA_CHECK → READY → JUTSU_SELECTION → COUNTDOWN → PLAYING
+ *   IDLE → CAMERA_CHECK → READY → CHARACTER_SELECT → JUTSU_SELECTION → COUNTDOWN → PLAYING
  *        PLAYING → SUCCESS → JUTSU_CAST → NEXT_ROUND → JUTSU_SELECTION …
  *                                       ↘ VICTORY (boss HP = 0)
  *        PLAYING → FAILED (time out) → COUNTDOWN (retry) | JUTSU_SELECTION
@@ -10,6 +10,7 @@
 import type { GameAction, GameState, GameStats, Phase } from "@/types/game";
 import { BOSS, JUTSU } from "./jutsu";
 import { castResult, pointsForSign } from "./scoring";
+import { CHARACTERS, bossFor, damageMultiplier } from "./characters";
 
 export const emptyStats = (): GameStats => ({
   score: 0,
@@ -27,6 +28,8 @@ export const emptyStats = (): GameStats => ({
 export const initialGameState = (): GameState => ({
   phase: "IDLE",
   round: 1,
+  characterId: null,
+  bossId: null,
   bossHp: BOSS.maxHp,
   bossMaxHp: BOSS.maxHp,
   jutsuId: null,
@@ -45,6 +48,8 @@ const ALLOWED: Record<GameAction["type"], Phase[]> = {
   START: ["IDLE"],
   CAMERA_READY: ["CAMERA_CHECK"],
   ENTER_SELECTION: ["READY"],
+  SELECT_CHARACTER: ["CHARACTER_SELECT"],
+  CHANGE_CHARACTER: ["JUTSU_SELECTION"],
   SELECT_JUTSU: ["JUTSU_SELECTION"],
   COUNTDOWN_TICK: ["COUNTDOWN"],
   TICK: ["PLAYING"],
@@ -56,10 +61,16 @@ const ALLOWED: Record<GameAction["type"], Phase[]> = {
   RETRY: ["FAILED"],
   BACK_TO_SELECTION: ["FAILED", "COUNTDOWN"],
   RESTART: ["VICTORY", "FAILED", "JUTSU_SELECTION"],
-  QUIT: ["CAMERA_CHECK", "READY", "JUTSU_SELECTION", "COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED", "VICTORY"],
+  QUIT: ["CAMERA_CHECK", "READY", "CHARACTER_SELECT", "JUTSU_SELECTION", "COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED", "VICTORY"],
 };
 
 export const COUNTDOWN_FROM = 3;
+
+/** Jutsu time limit including the hero's perk. */
+export function timeLimit(s: GameState, base: number): number {
+  const bonus = s.characterId ? CHARACTERS[s.characterId].timeBonusMs : 0;
+  return Math.max(5000, base + bonus);
+}
 
 export function gameReducer(s: GameState, a: GameAction): GameState {
   if (!ALLOWED[a.type].includes(s.phase)) return s;
@@ -72,11 +83,18 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
       return { ...s, phase: "READY" };
 
     case "ENTER_SELECTION":
-      return { ...s, phase: "JUTSU_SELECTION" };
+      return { ...s, phase: "CHARACTER_SELECT" };
+
+    case "SELECT_CHARACTER":
+      return { ...s, phase: "JUTSU_SELECTION", characterId: a.id, bossId: bossFor(a.id) };
+
+    case "CHANGE_CHARACTER":
+      // Switching hero restarts the fight against the new opponent.
+      return { ...initialGameState(), phase: "CHARACTER_SELECT" };
 
     case "SELECT_JUTSU": {
       const j = JUTSU[a.id];
-      return { ...s, phase: "COUNTDOWN", jutsuId: a.id, seqIndex: 0, timeLeftMs: j.timeLimitMs, countdown: COUNTDOWN_FROM, jutsuMistakes: 0 };
+      return { ...s, phase: "COUNTDOWN", jutsuId: a.id, seqIndex: 0, timeLeftMs: timeLimit(s, j.timeLimitMs), countdown: COUNTDOWN_FROM, jutsuMistakes: 0 };
     }
 
     case "COUNTDOWN_TICK": {
@@ -126,7 +144,8 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
 
     case "SUCCESS_DONE": {
       const j = JUTSU[s.jutsuId!];
-      const r = castResult(j, s.timeLeftMs, s.jutsuMistakes);
+      const hero = s.characterId ? CHARACTERS[s.characterId] : null;
+      const r = castResult(j, s.timeLeftMs, s.jutsuMistakes, damageMultiplier(hero, j.element));
       const bossHp = Math.max(0, s.bossHp - r.damage);
       return {
         ...s,
@@ -151,14 +170,14 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
 
     case "RETRY": {
       const j = JUTSU[s.jutsuId!];
-      return { ...s, phase: "COUNTDOWN", seqIndex: 0, timeLeftMs: j.timeLimitMs, countdown: COUNTDOWN_FROM, jutsuMistakes: 0 };
+      return { ...s, phase: "COUNTDOWN", seqIndex: 0, timeLeftMs: timeLimit(s, j.timeLimitMs), countdown: COUNTDOWN_FROM, jutsuMistakes: 0 };
     }
 
     case "BACK_TO_SELECTION":
       return { ...s, phase: "JUTSU_SELECTION", jutsuId: null, seqIndex: 0 };
 
     case "RESTART":
-      return { ...initialGameState(), phase: "JUTSU_SELECTION" };
+      return { ...initialGameState(), phase: "JUTSU_SELECTION", characterId: s.characterId, bossId: s.bossId };
 
     case "QUIT":
       return initialGameState();

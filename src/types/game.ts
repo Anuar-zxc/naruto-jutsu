@@ -1,9 +1,11 @@
 import type { SignId } from "./gestures";
+import type { CharacterId } from "@/lib/game/characters";
 
 export type Phase =
   | "IDLE"
   | "CAMERA_CHECK"
   | "READY"
+  | "CHARACTER_SELECT"
   | "JUTSU_SELECTION"
   | "COUNTDOWN"
   | "PLAYING"
@@ -56,6 +58,8 @@ export interface CastResult {
 export interface GameState {
   phase: Phase;
   round: number;
+  characterId: CharacterId | null;
+  bossId: CharacterId | null;
   bossHp: number;
   bossMaxHp: number;
   jutsuId: JutsuId | null;
@@ -75,6 +79,8 @@ export type GameAction =
   | { type: "START" }
   | { type: "CAMERA_READY" }
   | { type: "ENTER_SELECTION" }
+  | { type: "SELECT_CHARACTER"; id: CharacterId }
+  | { type: "CHANGE_CHARACTER" }
   | { type: "SELECT_JUTSU"; id: JutsuId }
   | { type: "COUNTDOWN_TICK" }
   | { type: "TICK"; dt: number }

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { SIGN_LIST } from "@/lib/vision/gestureDefinitions";
+import { CHARACTER_LIST } from "@/lib/game/characters";
 import { HandPictogram } from "./HandPictogram";
 
 export function StartScreen({ onStart }: { onStart: () => void }) {
@@ -16,7 +17,13 @@ export function StartScreen({ onStart }: { onStart: () => void }) {
   return (
     <main className="start">
       <Embers />
+      <div className="start-bg" />
       <div className="start-watermark">忍術</div>
+      <div className="start-roster" aria-hidden>
+        {CHARACTER_LIST.map((c, i) => (
+          <img key={c.id} src={c.image} alt="" style={{ animationDelay: `${i * 0.06}s` }} />
+        ))}
+      </div>
       <div className="start-inner">
         <div className="start-eyebrow">A WEBCAM HAND-SIGN BATTLE</div>
         <h1 className="start-title">
