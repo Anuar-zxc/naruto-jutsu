@@ -14,11 +14,12 @@ import type { SignId } from "../src/types/gestures";
 const ASPECT = 16 / 9;
 const features = (sign: SignId, o: PoseOptions = {}, seed = 1) => extractFrame(syntheticFrame(poseForSign(sign, o), 0, ASPECT, seed));
 const correction = (expected: SignId, pose: SignId, o: PoseOptions = {}) => getCorrection(SIGNS[expected], features(pose, o));
+const en = (expected: SignId, pose: SignId, o: PoseOptions = {}) => correction(expected, pose, o)?.text.en;
 
 // --- Features --------------------------------------------------------------
 
 test("finger extension: straight ≈ 1, curled ≈ 0 across tilt and scale", () => {
-  for (const tilt of [-35, 0, 35]) {
+  for (const tilt of [-35, 0, 35, 180]) {
     for (const palm of [0.08, 0.15, 0.25]) {
       const open = extractFrame({ hands: [syntheticHand({ side: "right", curls: curlsForShape("OPEN"), center: { x: 1, y: 0.5 }, palm, tilt }, ASPECT)], aspect: ASPECT, t: 0 });
       const fist = extractFrame({ hands: [syntheticHand({ side: "right", curls: curlsForShape("FIST"), center: { x: 1, y: 0.5 }, palm, tilt }, ASPECT)], aspect: ASPECT, t: 0 });
@@ -32,7 +33,7 @@ test("finger extension: straight ≈ 1, curled ≈ 0 across tilt and scale", () 
 
 test("hand distance is measured in palm lengths (scale invariant)", () => {
   for (const palm of [0.08, 0.15, 0.22]) {
-    const f = features("HORSE", { palm, distance: 2 });
+    const f = features("MONKEY", { palm, distance: 2 });
     assert.ok(Math.abs((f.handDistance ?? 0) - 2) < 0.05, `palm=${palm} distance=${f.handDistance}`);
   }
 });
@@ -44,20 +45,25 @@ test("sides: screen-left hand is the player's left", () => {
   assert.ok(f.hands[0].center.x < f.hands[1].center.x);
 });
 
-test("pointing angle: 0 = up, + = toward screen right", () => {
+test("pointing angle: 0 = up, + = toward screen right, ±180 = down", () => {
   const f = extractFrame({ hands: [syntheticHand({ side: "right", curls: curlsForShape("OPEN"), center: { x: 1, y: 0.5 }, tilt: 30 }, ASPECT)], aspect: ASPECT, t: 0 });
   assert.ok(Math.abs(f.hands[0].pointing - 30) < 8, `pointing=${f.hands[0].pointing}`);
+  const d = features("BOAR");
+  for (const h of d.hands) assert.ok(Math.abs(h.pointing) > 160, `boar pointing=${h.pointing}`);
 });
 
 // --- Classification --------------------------------------------------------
 
-test("every seal is recognised under size / distance / tilt / noise variation", () => {
+test("all 12 zodiac seals are recognised under size / distance / tilt / noise variation", () => {
+  assert.equal(SIGN_LIST.length, 12);
   const rec = new GestureRecognizer();
   let seed = 3;
   for (const def of SIGN_LIST) {
-    const variants: PoseOptions[] = [{}, { palm: 0.09 }, { palm: 0.22 }, { noise: 0.003 }, { tilt: { left: -20, right: 20 } }, { swap: true }];
+    const tilt = def.pointDown ? { left: 160, right: -160 } : { left: -20, right: 20 };
+    const variants: PoseOptions[] = [{}, { palm: 0.09 }, { palm: 0.22 }, { noise: 0.003 }, { tilt }, { swap: true }];
     if (def.distance?.max) variants.push({ distance: 0.9 }, { distance: def.distance.max - 0.2 });
-    if (def.distance?.min) variants.push({ distance: def.distance.min + 0.3 }, { distance: 6 });
+    if (def.stack === "topFirst") variants.push({ dy: 1.2 }, { dy: 2.2 });
+    if (def.stack === "side") variants.push({ dy: 0.5 });
     for (const v of variants) {
       const f = features(def.id, v, seed++);
       const scores = rec.classifyGesture(f);
@@ -77,24 +83,32 @@ test("seals are well separated: runner-up far below the winner", () => {
   }
 });
 
-test("ambiguous pose (half-bent middle finger between TIGER and RAM) is UNKNOWN", () => {
+test("ambiguous pose (half-bent middle finger between TIGER and HORSE) is UNKNOWN", () => {
   const rec = new GestureRecognizer();
   const f = features("TIGER", { override: { left: { middle: 0.55 }, right: { middle: 0.55 } } });
   const pick = rec.pickRaw(rec.classifyGesture(f));
   assert.notEqual(pick.sign, "TIGER");
-  assert.notEqual(pick.sign, "RAM");
+  assert.notEqual(pick.sign, "HORSE");
+});
+
+test("palms held sideways are neither MONKEY (up) nor BOAR (down)", () => {
+  const rec = new GestureRecognizer();
+  const pick = rec.pickRaw(rec.classifyGesture(features("MONKEY", { tilt: { left: -95, right: 95 } })));
+  assert.equal(pick.sign, null, `got ${pick.sign}`);
+});
+
+test("OX (side by side) vs DOG (palm above fist) are told apart by height", () => {
+  const rec = new GestureRecognizer();
+  assert.equal(rec.pickRaw(rec.classifyGesture(features("OX"))).sign, "OX");
+  assert.equal(rec.pickRaw(rec.classifyGesture(features("DOG"))).sign, "DOG");
+  // Fist above the palm is not a Dog.
+  assert.notEqual(rec.pickRaw(rec.classifyGesture(features("DOG", { dy: -1.6 }))).sign, "DOG");
 });
 
 test("one hand only → nothing recognised", () => {
   const rec = new GestureRecognizer();
   const pick = rec.pickRaw(rec.classifyGesture(features("TIGER", { only: ["right"] })));
   assert.equal(pick.sign, null);
-});
-
-test("hands in the dead zone between HORSE and MONKEY → neither", () => {
-  const rec = new GestureRecognizer();
-  const pick = rec.pickRaw(rec.classifyGesture(features("HORSE", { distance: 3.0 })));
-  assert.equal(pick.sign, null, `got ${pick.sign}`);
 });
 
 // --- Temporal smoothing ----------------------------------------------------
@@ -126,17 +140,18 @@ test("flickering labels (TIGER/SNAKE/TIGER/none) are never accepted", () => {
   }
 });
 
-test("sequence TIGER → RAM → SNAKE accepts each seal once", () => {
+test("real Great Fireball sequence Snake→Ram→Monkey→Boar→Horse→Tiger accepts each seal once", () => {
   const rec = new GestureRecognizer();
+  const seq: SignId[] = ["SNAKE", "RAM", "MONKEY", "BOAR", "HORSE", "TIGER"];
   const got: SignId[] = [];
   let t = 0;
-  for (const s of ["TIGER", "RAM", "SNAKE"] as SignId[]) {
+  for (const s of seq) {
     for (let i = 0; i < 20; i++) {
       const out = rec.process(syntheticFrame(poseForSign(s), (t += 33), ASPECT, t));
       if (out.accepted) got.push(out.accepted);
     }
   }
-  assert.deepEqual(got, ["TIGER", "RAM", "SNAKE"]);
+  assert.deepEqual(got, seq);
 });
 
 // --- Error mode / corrections ---------------------------------------------
@@ -145,68 +160,88 @@ test("correct pose → no correction", () => {
   for (const def of SIGN_LIST) assert.equal(getCorrection(def, features(def.id)), null, def.id);
 });
 
-test("TIGER with middle fingers curled → 'Extend your middle fingers.'", () => {
-  const c = correction("TIGER", "RAM");
-  assert.equal(c?.message, "Extend your middle fingers.");
+test("TIGER with middle fingers curled → 'Extend your middle fingers.' (+ Russian)", () => {
+  const c = correction("TIGER", "HORSE");
+  assert.equal(c?.text.en, "Extend your middle fingers.");
+  assert.equal(c?.text.ru, "Выпрями средние пальцы на обеих руках.");
   assert.deepEqual(c?.highlight, { side: "both", finger: "middle" });
 });
 
-test("RAM but middle fingers up → 'Fold down your middle fingers.'", () => {
-  assert.equal(correction("RAM", "TIGER")?.message, "Fold down your middle fingers.");
+test("HORSE but middle fingers up → 'Fold down your middle fingers.'", () => {
+  assert.equal(en("HORSE", "TIGER"), "Fold down your middle fingers.");
 });
 
 test("TIGER with right index bent → 'Raise your right index finger.'", () => {
   const c = correction("TIGER", "TIGER", { override: { right: { index: 0.95 } } });
-  assert.equal(c?.message, "Raise your right index finger.");
+  assert.equal(c?.text.en, "Raise your right index finger.");
+  assert.equal(c?.text.ru, "Подними указательный палец правой руки.");
   assert.deepEqual(c?.highlight, { side: "right", finger: "index" });
 });
 
 test("DRAGON with left ring finger up → 'Close your left ring finger.'", () => {
-  assert.equal(correction("DRAGON", "DRAGON", { override: { left: { ring: 0.05 } } })?.message, "Close your left ring finger.");
+  const c = correction("DRAGON", "DRAGON", { override: { left: { ring: 0.05 } } });
+  assert.equal(c?.text.en, "Close your left ring finger.");
+  assert.equal(c?.text.ru, "Согни безымянный палец левой руки.");
 });
 
 test("hands too far apart → 'Bring your hands closer together.'", () => {
-  assert.equal(correction("TIGER", "TIGER", { distance: 4.5 })?.message, "Bring your hands closer together.");
-  assert.equal(correction("SNAKE", "SNAKE", { distance: 4.5 })?.message, "Bring your hands closer together.");
+  assert.equal(en("TIGER", "TIGER", { distance: 4.5 }), "Bring your hands closer together.");
+  assert.equal(en("SNAKE", "SNAKE", { distance: 4.5 }), "Bring your hands closer together.");
+  assert.equal(correction("RAT", "RAT", { distance: 4.5 })?.text.ru, "Сведи руки ближе друг к другу.");
 });
 
-test("MONKEY with hands together → 'Spread your hands wider apart.'", () => {
-  assert.equal(correction("MONKEY", "HORSE")?.message, "Spread your hands wider apart.");
+test("DOG shown as OX → 'Raise your open palm higher, above your fist.'", () => {
+  const c = correction("DOG", "OX");
+  assert.equal(c?.text.en, "Raise your open palm higher, above your fist.");
+  assert.equal(c?.text.ru, "Подними раскрытую ладонь выше, над кулаком.");
 });
 
-test("RAM with right hand tilted outward → rotate inward", () => {
-  const c = correction("RAM", "RAM", { tilt: { left: 0, right: 70 } });
-  assert.equal(c?.message, "Rotate your right hand inward — fingers straight up.");
-  const c2 = correction("RAM", "RAM", { tilt: { left: -70, right: 0 } });
-  assert.equal(c2?.message, "Rotate your left hand inward — fingers straight up.");
-  const c3 = correction("RAM", "RAM", { tilt: { left: 60, right: 0 } });
-  assert.equal(c3?.message, "Rotate your left hand outward — fingers straight up.");
+test("DOG with fist on top → 'Swap heights …'", () => {
+  assert.match(en("DOG", "DOG", { dy: -1.6 }) ?? "", /^Swap heights/);
+});
+
+test("OX shown stacked → 'Hold your hands side by side, at the same height.'", () => {
+  assert.equal(en("OX", "DOG"), "Hold your hands side by side, at the same height.");
+});
+
+test("BOAR shown as MONKEY → 'Point your fingers DOWN …'; MONKEY shown as BOAR → fingers up", () => {
+  assert.match(en("BOAR", "MONKEY") ?? "", /^Point your fingers DOWN/);
+  assert.equal(correction("BOAR", "MONKEY")?.text.ru, "Направь пальцы ВНИЗ — ладони к полу.");
+  assert.match(en("MONKEY", "BOAR") ?? "", /^Point your (left|right) fingers up/);
+});
+
+test("HORSE with right hand tilted outward → rotate inward", () => {
+  assert.equal(en("HORSE", "HORSE", { tilt: { left: 0, right: 70 } }), "Rotate your right hand inward — fingers straight up.");
+  assert.equal(en("HORSE", "HORSE", { tilt: { left: -70, right: 0 } }), "Rotate your left hand inward — fingers straight up.");
+  assert.equal(en("HORSE", "HORSE", { tilt: { left: 60, right: 0 } }), "Rotate your left hand outward — fingers straight up.");
+  assert.equal(correction("HORSE", "HORSE", { tilt: { left: 0, right: 70 } })?.text.ru, "Поверни правую руку внутрь — пальцы строго вверх.");
 });
 
 test("one hand missing → names the missing hand", () => {
-  assert.equal(correction("TIGER", "TIGER", { only: ["right"] })?.message, "Show both hands — your left hand is out of view.");
+  const c = correction("TIGER", "TIGER", { only: ["right"] });
+  assert.equal(c?.text.en, "Show both hands — your left hand is out of view.");
+  assert.equal(c?.text.ru, "Покажи обе руки — левой руки не видно.");
 });
 
 test("no hands → 'Move your hands into the frame.'", () => {
-  assert.equal(getCorrection(SIGNS.TIGER, extractFrame({ hands: [], aspect: ASPECT, t: 0 }))?.message, "Move your hands into the frame.");
+  assert.equal(getCorrection(SIGNS.TIGER, extractFrame({ hands: [], aspect: ASPECT, t: 0 }))?.text.en, "Move your hands into the frame.");
 });
 
 test("tiny hands → 'Move closer to the camera.'", () => {
-  assert.equal(correction("TIGER", "TIGER", { palm: 0.05 })?.message, "Move closer to the camera.");
+  assert.equal(en("TIGER", "TIGER", { palm: 0.05 }), "Move closer to the camera.");
 });
 
 test("OX but two fists → whole-hand instruction to open one hand", () => {
-  const m = correction("OX", "SNAKE", { distance: 2 })?.message ?? "";
-  assert.match(m, /^Open your (left|right) hand/);
+  assert.match(en("OX", "SNAKE", { distance: 2 }) ?? "", /^Open your (left|right) hand/);
+  assert.match(correction("OX", "SNAKE", { distance: 2 })?.text.ru ?? "", /^Раскрой (левую|правую) руку/);
 });
 
 test("SNAKE but both palms open → 'Close both hands into fists.'", () => {
-  assert.equal(correction("SNAKE", "HORSE")?.message, "Close both hands into fists.");
+  assert.equal(en("SNAKE", "MONKEY", { distance: 1.4 }), "Close both hands into fists.");
 });
 
 test("finger errors take priority over distance errors", () => {
-  const c = correction("TIGER", "RAM", { distance: 4.5 });
-  assert.equal(c?.kind, "fingers");
+  assert.equal(correction("TIGER", "HORSE", { distance: 4.5 })?.kind, "fingers");
 });
 
 run();

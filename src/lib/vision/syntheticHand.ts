@@ -138,8 +138,10 @@ export function curlsForShape(shape: HandShapeId, thumbCurl = 0.6): Curls {
 
 export interface PoseOptions {
   aspect?: number;
-  /** Palm-centre distance in palm lengths. */
+  /** Palm-centre distance in palm lengths (horizontal). */
   distance?: number;
+  /** Vertical offset in palm lengths: how far the FIRST shape's hand sits above the other. */
+  dy?: number;
   palm?: number;
   tilt?: { left?: number; right?: number };
   /** Per-hand curl overrides, e.g. { right: { middle: 0.9 } }. */
@@ -157,15 +159,21 @@ export function poseForSign(sign: SignId, o: PoseOptions = {}): SyntheticHandSpe
   const def = SIGNS[sign];
   const aspect = o.aspect ?? 16 / 9;
   const palm = o.palm ?? 0.15;
-  const distance =
-    o.distance ?? (def.distance?.min != null ? def.distance.min + 1.1 : def.distance?.max != null ? 1.4 : 2.0);
+  const stacked = def.stack === "topFirst";
+  const distance = o.distance ?? (stacked ? 0.6 : def.distance?.max != null ? 1.4 : 2.0);
+  const dy = o.dy ?? (stacked ? 1.6 : 0);
   const [a, b] = o.swap ? [def.shapes[1], def.shapes[0]] : def.shapes;
   const half = (distance * palm) / 2;
   const cx = aspect / 2;
   const cy = o.cy ?? 0.55;
+  // Hand with the FIRST shape of the definition goes up by dy/2 palms, the other down.
+  const firstIsLeft = !o.swap;
+  const yLeft = cy + (firstIsLeft ? -1 : 1) * (dy * palm) / 2;
+  const yRight = cy + (firstIsLeft ? 1 : -1) * (dy * palm) / 2;
+  const down = def.pointDown;
   const specs: SyntheticHandSpec[] = [
-    { side: "left", curls: { ...curlsForShape(a), ...o.override?.left }, center: { x: cx - half, y: cy }, palm, tilt: o.tilt?.left ?? -6, noise: o.noise },
-    { side: "right", curls: { ...curlsForShape(b), ...o.override?.right }, center: { x: cx + half, y: cy }, palm, tilt: o.tilt?.right ?? 6, noise: o.noise },
+    { side: "left", curls: { ...curlsForShape(a), ...o.override?.left }, center: { x: cx - half, y: yLeft }, palm, tilt: o.tilt?.left ?? (down ? 174 : -6), noise: o.noise },
+    { side: "right", curls: { ...curlsForShape(b), ...o.override?.right }, center: { x: cx + half, y: yRight }, palm, tilt: o.tilt?.right ?? (down ? -174 : 6), noise: o.noise },
   ];
   return o.only ? specs.filter((s) => o.only!.includes(s.side)) : specs;
 }

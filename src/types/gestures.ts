@@ -12,6 +12,8 @@
  *   the player's right hand appears on the right side of the screen.
  */
 
+import type { L } from "./i18n";
+
 export type FingerName = "thumb" | "index" | "middle" | "ring" | "pinky";
 
 /** The four long fingers used for classification (thumb is too ambiguous). */
@@ -78,7 +80,20 @@ export interface FrameFeatures {
   handDistance: number | null;
 }
 
-export type SignId = "TIGER" | "RAM" | "SNAKE" | "HORSE" | "DRAGON" | "MONKEY" | "OX" | "BIRD";
+/** The twelve zodiac hand seals. */
+export type SignId =
+  | "RAT"
+  | "OX"
+  | "TIGER"
+  | "RABBIT"
+  | "DRAGON"
+  | "SNAKE"
+  | "HORSE"
+  | "RAM"
+  | "MONKEY"
+  | "BIRD"
+  | "DOG"
+  | "BOAR";
 
 /** Per-hand finger configuration. Values: 1 = extended, 0 = curled. */
 export type HandShapeId = "FIST" | "OPEN" | "INDEX" | "PEACE" | "HORNS";
@@ -89,15 +104,15 @@ export interface HandShape {
   fingers: Record<LongFinger, 0 | 1>;
 }
 
-export type CorrectionRuleKind = "hands" | "size" | "shape" | "fingers" | "distance" | "orientation";
+export type CorrectionRuleKind = "hands" | "size" | "shape" | "fingers" | "distance" | "stack" | "orientation";
 
 export interface SignDefinition {
   id: SignId;
   /** Zodiac kanji used as the seal glyph. */
   kanji: string;
-  name: string;
+  name: L;
   /** Short player-facing instruction. */
-  howTo: string;
+  howTo: L;
   requiredHands: 2;
   /** Unordered pair: one hand makes shapes[0], the other shapes[1]. */
   shapes: [HandShapeId, HandShapeId];
@@ -105,6 +120,13 @@ export interface SignDefinition {
   distance?: { min?: number; max?: number };
   /** If true, extended fingers must point roughly upward. */
   pointUp?: boolean;
+  /** If true, fingers must point downward. */
+  pointDown?: boolean;
+  /**
+   * Vertical arrangement: "side" = hands at the same height,
+   * "topFirst" = the hand making shapes[0] is ABOVE the other one.
+   */
+  stack?: "side" | "topFirst";
   /** How far (0..1) a finger's extension may drift from the ideal before it counts as wrong. */
   tolerance: number;
   /** Minimum confidence for this sign to be recognised. */
@@ -139,7 +161,7 @@ export interface Correction {
   /** Stable key, used to debounce identical messages. */
   key: string;
   kind: CorrectionRuleKind;
-  message: string;
+  text: L;
   /** Which part of the skeleton to highlight on the overlay. */
   highlight?: { side: HandSide | "both"; finger?: FingerName };
 }

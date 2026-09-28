@@ -1,11 +1,15 @@
 /**
- * The seal vocabulary.
+ * The twelve zodiac hand seals.
  *
- * Every seal is a PAIR of hand shapes plus optional relational constraints
- * (how far apart the hands are, which way the fingers point). The pairs were
- * chosen so that every seal differs from every other one in at least one
- * clearly visible feature — which is what makes rule-based classification
- * reliable, and what gives the correction engine something concrete to say.
+ * Real seals interlock the fingers of both hands, and a webcam hand tracker
+ * cannot see fingers hidden behind the other hand. So every seal here is a
+ * camera-readable approximation built from what the tracker CAN see reliably:
+ * a hand shape per hand + how the hands relate (distance, height, direction).
+ * Where possible the approximation keeps the look of the real seal:
+ *   Tiger — index+middle up on both hands      Dog  — open palm resting ON a fist
+ *   Horse — index fingers up, touching         Boar — both palms pointing down
+ *   Snake — two clasped fists                  Rat  — two fingers wrapped by a fist
+ * Every pair of seals differs in at least one clearly visible feature.
  */
 import type { HandShape, HandShapeId, SignDefinition, SignId } from "@/types/gestures";
 
@@ -19,105 +23,117 @@ export const HAND_SHAPES: Record<HandShapeId, HandShape> = {
 
 /** Hands closer than this (palm lengths between palm centres) count as "together". */
 export const CLOSE_MAX = 2.6;
-/** Hands further apart than this count as "spread wide". */
-export const WIDE_MIN = 3.4;
 
-const DEFAULT_RULES: SignDefinition["correctionRules"] = ["hands", "size", "shape", "fingers", "distance", "orientation"];
+const RULES: SignDefinition["correctionRules"] = ["hands", "size", "shape", "fingers", "distance", "stack", "orientation"];
+const base = { requiredHands: 2 as const, tolerance: 0.45, threshold: 0.66, correctionRules: RULES };
 
 export const SIGNS: Record<SignId, SignDefinition> = {
+  RAT: {
+    ...base,
+    id: "RAT",
+    kanji: "子",
+    name: { en: "Rat", ru: "Крыса" },
+    howTo: { en: "One hand: index + middle up. Other hand: fist wrapped around them", ru: "Одна рука: указательный и средний вверх. Другая — кулак рядом, обхватывает их" },
+    shapes: ["PEACE", "FIST"],
+    distance: { max: CLOSE_MAX },
+  },
+  OX: {
+    ...base,
+    id: "OX",
+    kanji: "丑",
+    name: { en: "Ox", ru: "Бык" },
+    howTo: { en: "Open palm and fist side by side, at the same height", ru: "Раскрытая ладонь и кулак рядом, на одной высоте" },
+    shapes: ["OPEN", "FIST"],
+    stack: "side",
+  },
   TIGER: {
+    ...base,
     id: "TIGER",
     kanji: "寅",
-    name: "Tiger",
-    howTo: "Both hands: index + middle fingers up, hands together",
-    requiredHands: 2,
+    name: { en: "Tiger", ru: "Тигр" },
+    howTo: { en: "Both hands: index + middle up, hands together", ru: "Обе руки: указательный и средний вверх, руки вместе" },
     shapes: ["PEACE", "PEACE"],
     distance: { max: CLOSE_MAX },
     pointUp: true,
-    tolerance: 0.45,
-    threshold: 0.66,
-    correctionRules: DEFAULT_RULES,
   },
-  RAM: {
-    id: "RAM",
-    kanji: "未",
-    name: "Ram",
-    howTo: "Both hands: only index fingers up, pointing to the sky",
-    requiredHands: 2,
-    shapes: ["INDEX", "INDEX"],
-    pointUp: true,
-    tolerance: 0.45,
-    threshold: 0.66,
-    correctionRules: DEFAULT_RULES,
-  },
-  SNAKE: {
-    id: "SNAKE",
-    kanji: "巳",
-    name: "Snake",
-    howTo: "Two fists pressed close together",
-    requiredHands: 2,
-    shapes: ["FIST", "FIST"],
-    distance: { max: CLOSE_MAX },
-    tolerance: 0.45,
-    threshold: 0.66,
-    correctionRules: DEFAULT_RULES,
-  },
-  HORSE: {
-    id: "HORSE",
-    kanji: "午",
-    name: "Horse",
-    howTo: "Both palms open, hands side by side",
-    requiredHands: 2,
-    shapes: ["OPEN", "OPEN"],
-    distance: { max: CLOSE_MAX },
-    tolerance: 0.45,
-    threshold: 0.66,
-    correctionRules: DEFAULT_RULES,
-  },
-  MONKEY: {
-    id: "MONKEY",
-    kanji: "申",
-    name: "Monkey",
-    howTo: "Both palms open, arms spread wide apart",
-    requiredHands: 2,
-    shapes: ["OPEN", "OPEN"],
-    distance: { min: WIDE_MIN },
-    tolerance: 0.45,
-    threshold: 0.66,
-    correctionRules: DEFAULT_RULES,
+  RABBIT: {
+    ...base,
+    id: "RABBIT",
+    kanji: "卯",
+    name: { en: "Rabbit", ru: "Кролик" },
+    howTo: { en: "One hand: index finger up. Other hand: fist", ru: "Одна рука: только указательный вверх. Другая — кулак" },
+    shapes: ["INDEX", "FIST"],
   },
   DRAGON: {
+    ...base,
     id: "DRAGON",
     kanji: "辰",
-    name: "Dragon",
-    howTo: "Both hands: horns — index + pinky up, others folded",
-    requiredHands: 2,
+    name: { en: "Dragon", ru: "Дракон" },
+    howTo: { en: "Both hands: horns — index + pinky up", ru: "Обе руки: «рога» — указательный и мизинец вверх" },
     shapes: ["HORNS", "HORNS"],
-    tolerance: 0.45,
     threshold: 0.64,
-    correctionRules: DEFAULT_RULES,
   },
-  OX: {
-    id: "OX",
-    kanji: "丑",
-    name: "Ox",
-    howTo: "One open palm, one fist",
-    requiredHands: 2,
-    shapes: ["OPEN", "FIST"],
-    tolerance: 0.45,
-    threshold: 0.66,
-    correctionRules: DEFAULT_RULES,
+  SNAKE: {
+    ...base,
+    id: "SNAKE",
+    kanji: "巳",
+    name: { en: "Snake", ru: "Змея" },
+    howTo: { en: "Two fists clasped close together", ru: "Два кулака, сжатые вплотную" },
+    shapes: ["FIST", "FIST"],
+    distance: { max: CLOSE_MAX },
+  },
+  HORSE: {
+    ...base,
+    id: "HORSE",
+    kanji: "午",
+    name: { en: "Horse", ru: "Лошадь" },
+    howTo: { en: "Both index fingers up, touching — a triangle", ru: "Оба указательных вверх, касаются — треугольник" },
+    shapes: ["INDEX", "INDEX"],
+    distance: { max: CLOSE_MAX },
+    pointUp: true,
+  },
+  RAM: {
+    ...base,
+    id: "RAM",
+    kanji: "未",
+    name: { en: "Ram", ru: "Баран" },
+    howTo: { en: "One hand: index + middle up. Other hand: index only", ru: "Одна рука: указательный и средний. Другая: только указательный" },
+    shapes: ["PEACE", "INDEX"],
+  },
+  MONKEY: {
+    ...base,
+    id: "MONKEY",
+    kanji: "申",
+    name: { en: "Monkey", ru: "Обезьяна" },
+    howTo: { en: "Both palms open, fingers pointing up", ru: "Обе ладони раскрыты, пальцы смотрят вверх" },
+    shapes: ["OPEN", "OPEN"],
+    pointUp: true,
   },
   BIRD: {
+    ...base,
     id: "BIRD",
     kanji: "酉",
-    name: "Bird",
-    howTo: "One open palm, one index finger up",
-    requiredHands: 2,
+    name: { en: "Bird", ru: "Птица" },
+    howTo: { en: "One open palm, one index finger up", ru: "Одна ладонь раскрыта, на другой — указательный вверх" },
     shapes: ["OPEN", "INDEX"],
-    tolerance: 0.45,
-    threshold: 0.66,
-    correctionRules: DEFAULT_RULES,
+  },
+  DOG: {
+    ...base,
+    id: "DOG",
+    kanji: "戌",
+    name: { en: "Dog", ru: "Собака" },
+    howTo: { en: "Open palm held ABOVE a fist", ru: "Раскрытая ладонь НАД кулаком" },
+    shapes: ["OPEN", "FIST"],
+    stack: "topFirst",
+  },
+  BOAR: {
+    ...base,
+    id: "BOAR",
+    kanji: "亥",
+    name: { en: "Boar", ru: "Кабан" },
+    howTo: { en: "Both palms open, fingers pointing DOWN", ru: "Обе ладони раскрыты, пальцы смотрят ВНИЗ" },
+    shapes: ["OPEN", "OPEN"],
+    pointDown: true,
   },
 };
 

@@ -46,14 +46,39 @@ export function distanceFactor(def: SignDefinition, d: number | null): number {
 
 const UP_OK = 40;
 const UP_BAD = 95;
+const DOWN_OK = 125;
+const DOWN_BAD = 80;
+
+function handOrientation(def: SignDefinition, h: HandFeatures): number {
+  const a = Math.abs(h.pointing);
+  if (def.pointUp) return a <= UP_OK ? 1 : a >= UP_BAD ? 0 : 1 - (a - UP_OK) / (UP_BAD - UP_OK);
+  if (def.pointDown) return a >= DOWN_OK ? 1 : a <= DOWN_BAD ? 0 : (a - DOWN_BAD) / (DOWN_OK - DOWN_BAD);
+  return 1;
+}
+
 export function orientationFactor(def: SignDefinition, hands: HandFeatures[]): number {
-  if (!def.pointUp) return 1;
-  return Math.min(
-    ...hands.map((h) => {
-      const a = Math.abs(h.pointing);
-      return a <= UP_OK ? 1 : a >= UP_BAD ? 0 : 1 - (a - UP_OK) / (UP_BAD - UP_OK);
-    }),
-  );
+  if (!def.pointUp && !def.pointDown) return 1;
+  return Math.min(...hands.map((h) => handOrientation(def, h)));
+}
+
+/**
+ * Vertical offset (in palm lengths) of `top` above `other`; positive = `top` is higher.
+ */
+export function heightAbove(top: HandFeatures, other: HandFeatures): number {
+  const palm = (top.size + other.size) / 2 || 1;
+  return (other.center.y - top.center.y) / palm;
+}
+
+export function stackFactor(def: SignDefinition, left: HandFeatures, right: HandFeatures, asg: { left: HandShapeId; right: HandShapeId }): number {
+  if (!def.stack) return 1;
+  if (def.stack === "side") {
+    const dy = Math.abs(heightAbove(left, right));
+    return dy <= 0.9 ? 1 : dy >= 1.6 ? 0 : 1 - (dy - 0.9) / 0.7;
+  }
+  // topFirst: the hand making shapes[0] must be above the other.
+  const [top, other] = asg.left === def.shapes[0] ? [left, right] : [right, left];
+  const dy = heightAbove(top, other);
+  return dy >= 1.0 ? 1 : dy <= 0.3 ? 0 : (dy - 0.3) / 0.7;
 }
 
 /**
@@ -73,7 +98,7 @@ export function scoreSign(def: SignDefinition, f: FrameFeatures): SignScore {
   if (f.hands.length < def.requiredHands) return { sign: def.id, confidence: 0, assignment: null };
   const [left, right] = f.hands;
   const asg = bestAssignment(def, left, right);
-  const confidence = asg.score * distanceFactor(def, f.handDistance) * orientationFactor(def, f.hands);
+  const confidence =
+    asg.score * distanceFactor(def, f.handDistance) * orientationFactor(def, f.hands) * stackFactor(def, left, right, asg);
   return { sign: def.id, confidence, assignment: { left: asg.left, right: asg.right } };
 }
-

@@ -3,13 +3,13 @@
  *
  * Given the seal the player SHOULD be making and the current hand features,
  * find every concrete deviation (missing hand, wrong finger, hands too far,
- * hand tilted), score how severe each one is, and return ONLY the most useful
- * one as a short imperative instruction ("Straighten your right middle finger").
+ * wrong height, hand tilted), score how severe each one is, and return ONLY the
+ * most useful one as a short imperative instruction — in Russian and English.
  *
  * Rules are inspected in the order given by the seal's `correctionRules`, and
  * within the finger rule the largest deviation wins. Deviations that affect
  * both hands the same way are merged into one plural message
- * ("Extend your index fingers").
+ * ("Extend your index fingers" / "Выпрями указательные пальцы на обеих руках").
  */
 import type {
   Correction,
@@ -21,9 +21,10 @@ import type {
   LongFinger,
   SignDefinition,
 } from "@/types/gestures";
+import type { L } from "@/types/i18n";
 import { LONG_FINGERS } from "@/types/gestures";
 import { HAND_SHAPES } from "./gestureDefinitions";
-import { bestAssignment, distanceFactor } from "./gestureScoring";
+import { bestAssignment, distanceFactor, heightAbove, orientationFactor, stackFactor } from "./gestureScoring";
 
 /** Palm length (fraction of frame height) below which the hand is too small to read well. */
 export const MIN_PALM_SIZE = 0.06;
@@ -40,7 +41,78 @@ interface FingerIssue {
   severity: number;
 }
 
+// ---------------------------------------------------------------------------
+// Vocabulary
+// ---------------------------------------------------------------------------
+
+const SIDE = {
+  en: { left: "left", right: "right" },
+  /** genitive: "… левой руки" */
+  ruGen: { left: "левой руки", right: "правой руки" },
+  /** accusative: "левую руку" */
+  ruAcc: { left: "левую руку", right: "правую руку" },
+  /** nominative, capitalised: "Левая рука" */
+  ruNom: { left: "Левая рука", right: "Правая рука" },
+};
+
+const FINGER = {
+  en: { index: "index finger", middle: "middle finger", ring: "ring finger", pinky: "pinky" },
+  enPl: { index: "index fingers", middle: "middle fingers", ring: "ring fingers", pinky: "pinkies" },
+  ru: { index: "указательный палец", middle: "средний палец", ring: "безымянный палец", pinky: "мизинец" },
+  ruPl: { index: "указательные пальцы", middle: "средние пальцы", ring: "безымянные пальцы", pinky: "мизинцы" },
+};
+
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+function shapeText(side: HandSide, shape: HandShapeId): L {
+  switch (shape) {
+    case "FIST":
+      return { en: `Close your ${side} hand into a fist.`, ru: `Сожми ${SIDE.ruAcc[side]} в кулак.` };
+    case "OPEN":
+      return { en: `Open your ${side} hand — spread all fingers.`, ru: `Раскрой ${SIDE.ruAcc[side]} — все пальцы врозь.` };
+    case "INDEX":
+      return { en: `${cap(side)} hand: only the index finger up.`, ru: `${SIDE.ruNom[side]}: подними только указательный палец.` };
+    case "PEACE":
+      return { en: `${cap(side)} hand: index and middle fingers up, fold the rest.`, ru: `${SIDE.ruNom[side]}: указательный и средний вверх, остальные согни.` };
+    case "HORNS":
+      return { en: `${cap(side)} hand: index and pinky up, fold the middle two.`, ru: `${SIDE.ruNom[side]}: указательный и мизинец вверх, средние согни.` };
+  }
+}
+
+function bothShapeText(shape: HandShapeId): L {
+  switch (shape) {
+    case "FIST":
+      return { en: "Close both hands into fists.", ru: "Сожми обе руки в кулаки." };
+    case "OPEN":
+      return { en: "Open both hands — spread your fingers.", ru: "Раскрой обе ладони — пальцы врозь." };
+    case "INDEX":
+      return { en: "Both hands: only index fingers up.", ru: "Обе руки: только указательные пальцы вверх." };
+    case "PEACE":
+      return { en: "Both hands: index and middle fingers up.", ru: "Обе руки: указательный и средний вверх." };
+    case "HORNS":
+      return { en: "Both hands: index and pinky up.", ru: "Обе руки: указательный и мизинец вверх." };
+  }
+}
+
+function fingerText(issue: FingerIssue, both: boolean): L {
+  const f = issue.finger;
+  if (both) {
+    return issue.fix === "extend"
+      ? { en: `Extend your ${FINGER.enPl[f]}.`, ru: `Выпрями ${FINGER.ruPl[f]} на обеих руках.` }
+      : { en: `Fold down your ${FINGER.enPl[f]}.`, ru: `Согни ${FINGER.ruPl[f]} на обеих руках.` };
+  }
+  const side = issue.side;
+  if (issue.fix === "extend") {
+    return f === "index"
+      ? { en: `Raise your ${side} index finger.`, ru: `Подними указательный палец ${SIDE.ruGen[side]}.` }
+      : { en: `Straighten your ${side} ${FINGER.en[f]}.`, ru: `Выпрями ${FINGER.ru[f]} ${SIDE.ruGen[side]}.` };
+  }
+  return { en: `Close your ${side} ${FINGER.en[f]}.`, ru: `Согни ${FINGER.ru[f]} ${SIDE.ruGen[side]}.` };
+}
+
+// ---------------------------------------------------------------------------
+// Rules
+// ---------------------------------------------------------------------------
 
 function fingerIssues(hand: HandFeatures, shape: HandShapeId): FingerIssue[] {
   const target = HAND_SHAPES[shape].fingers;
@@ -53,40 +125,19 @@ function fingerIssues(hand: HandFeatures, shape: HandShapeId): FingerIssue[] {
   return out;
 }
 
-/** Whole-hand message when most of a hand is wrong — clearer than naming one finger. */
-function shapeMessage(side: HandSide, shape: HandShapeId): string {
-  switch (shape) {
-    case "FIST":
-      return `Close your ${side} hand into a fist.`;
-    case "OPEN":
-      return `Open your ${side} hand — spread all fingers.`;
-    case "INDEX":
-      return `${cap(side)} hand: only the index finger up.`;
-    case "PEACE":
-      return `${cap(side)} hand: index and middle fingers up, fold the rest.`;
-    case "HORNS":
-      return `${cap(side)} hand: index and pinky up, fold the middle two.`;
-  }
-}
-
-function fingerMessage(issue: FingerIssue, both: boolean): string {
-  const f = issue.finger === "pinky" ? "pinky" : `${issue.finger} finger`;
-  if (both) {
-    const plural = issue.finger === "pinky" ? "pinkies" : `${issue.finger} fingers`;
-    return issue.fix === "extend" ? `Extend your ${plural}.` : `Fold down your ${plural}.`;
-  }
-  if (issue.fix === "extend") return issue.finger === "index" ? `Raise your ${issue.side} index finger.` : `Straighten your ${issue.side} ${f}.`;
-  return `Close your ${issue.side} ${f}.`;
-}
-
 function handsRule(def: SignDefinition, f: FrameFeatures): Correction | null {
-  if (f.hands.length === 0) return { key: "hands:none", kind: "hands", message: "Move your hands into the frame." };
+  if (f.hands.length === 0) {
+    return { key: "hands:none", kind: "hands", text: { en: "Move your hands into the frame.", ru: "Подними обе руки в кадр." } };
+  }
   if (f.hands.length < def.requiredHands) {
     const missing: HandSide = f.hands[0].side === "left" ? "right" : "left";
     return {
       key: `hands:missing:${missing}`,
       kind: "hands",
-      message: `Show both hands — your ${missing} hand is out of view.`,
+      text: {
+        en: `Show both hands — your ${missing} hand is out of view.`,
+        ru: `Покажи обе руки — ${missing === "left" ? "левой" : "правой"} руки не видно.`,
+      },
       highlight: { side: missing },
     };
   }
@@ -95,7 +146,7 @@ function handsRule(def: SignDefinition, f: FrameFeatures): Correction | null {
 
 function sizeRule(_def: SignDefinition, f: FrameFeatures): Correction | null {
   const smallest = Math.min(...f.hands.map((h) => h.size));
-  if (smallest < MIN_PALM_SIZE) return { key: "size:small", kind: "size", message: "Move closer to the camera." };
+  if (smallest < MIN_PALM_SIZE) return { key: "size:small", kind: "size", text: { en: "Move closer to the camera.", ru: "Подойди ближе к камере." } };
   return null;
 }
 
@@ -117,25 +168,22 @@ function shapeAndFingerRules(def: SignDefinition, f: FrameFeatures, kinds: Set<s
       .sort((a, b) => b.n - a.n);
     if (perHand.length === 2 && perHand[0].s === perHand[1].s) {
       const s = perHand[0].s;
-      const msg =
-        s === "FIST" ? "Close both hands into fists." : s === "OPEN" ? "Open both hands — spread your fingers." : `Both hands: ${HAND_SHAPES[s].label}.`;
-      return { key: `shape:both:${s}`, kind: "shape", message: msg, highlight: { side: "both" } };
+      return { key: `shape:both:${s}`, kind: "shape", text: bothShapeText(s), highlight: { side: "both" } };
     }
     if (perHand.length > 0) {
       const { h, s } = perHand[0];
-      return { key: `shape:${h.side}:${s}`, kind: "shape", message: shapeMessage(h.side, s), highlight: { side: h.side } };
+      return { key: `shape:${h.side}:${s}`, kind: "shape", text: shapeText(h.side, s), highlight: { side: h.side } };
     }
   }
 
   if (!kinds.has("fingers")) return null;
   issues.sort((a, b) => b.severity - a.severity);
   const worst = issues[0];
-  const twin = issues.find((i) => i !== worst && i.finger === worst.finger && i.fix === worst.fix);
-  const both = !!twin;
+  const both = issues.some((i) => i !== worst && i.finger === worst.finger && i.fix === worst.fix);
   return {
     key: `finger:${both ? "both" : worst.side}:${worst.finger}:${worst.fix}`,
     kind: "fingers",
-    message: fingerMessage(worst, both),
+    text: fingerText(worst, both),
     highlight: { side: both ? "both" : worst.side, finger: worst.finger as FingerName },
   };
 }
@@ -144,22 +192,69 @@ function distanceRule(def: SignDefinition, f: FrameFeatures): Correction | null 
   if (!def.distance || f.handDistance == null) return null;
   if (distanceFactor(def, f.handDistance) >= 0.85) return null;
   if (def.distance.max != null && f.handDistance > def.distance.max) {
-    return { key: "distance:closer", kind: "distance", message: "Bring your hands closer together.", highlight: { side: "both" } };
+    return {
+      key: "distance:closer",
+      kind: "distance",
+      text: { en: "Bring your hands closer together.", ru: "Сведи руки ближе друг к другу." },
+      highlight: { side: "both" },
+    };
   }
   if (def.distance.min != null && f.handDistance < def.distance.min) {
-    return { key: "distance:wider", kind: "distance", message: "Spread your hands wider apart.", highlight: { side: "both" } };
+    return { key: "distance:wider", kind: "distance", text: { en: "Spread your hands wider apart.", ru: "Разведи руки шире." }, highlight: { side: "both" } };
   }
   return null;
 }
 
+function stackRule(def: SignDefinition, f: FrameFeatures): Correction | null {
+  if (!def.stack) return null;
+  const [left, right] = f.hands;
+  const asg = bestAssignment(def, left, right);
+  if (stackFactor(def, left, right, asg) >= 0.85) return null;
+  if (def.stack === "side") {
+    return {
+      key: "stack:side",
+      kind: "stack",
+      text: { en: "Hold your hands side by side, at the same height.", ru: "Держи руки рядом, на одной высоте." },
+      highlight: { side: "both" },
+    };
+  }
+  const [top, other] = asg.left === def.shapes[0] ? [left, right] : [right, left];
+  const below = heightAbove(top, other) < 0;
+  const topShape = HAND_SHAPES[def.shapes[0]].id === "OPEN" ? { en: "open palm", ru: "раскрытую ладонь" } : { en: "first hand", ru: "первую руку" };
+  const otherShape = HAND_SHAPES[def.shapes[1]].id === "FIST" ? { en: "your fist", ru: "кулаком" } : { en: "the other hand", ru: "другой рукой" };
+  return {
+    key: `stack:top:${below ? "flip" : "raise"}`,
+    kind: "stack",
+    text: below
+      ? { en: `Swap heights: put your ${topShape.en} ABOVE ${otherShape.en}.`, ru: `Поменяй руки по высоте: ${topShape.ru} — НАД ${otherShape.ru}.` }
+      : { en: `Raise your ${topShape.en} higher, above ${otherShape.en}.`, ru: `Подними ${topShape.ru} выше, над ${otherShape.ru}.` },
+    highlight: { side: top.side },
+  };
+}
+
 function orientationRule(def: SignDefinition, f: FrameFeatures): Correction | null {
-  if (!def.pointUp) return null;
-  // Worst-tilted hand.
+  if (!def.pointUp && !def.pointDown) return null;
+  if (orientationFactor(def, f.hands) >= 0.85) return null;
+
+  if (def.pointDown) {
+    const worst = [...f.hands].sort((a, b) => Math.abs(a.pointing) - Math.abs(b.pointing))[0];
+    return {
+      key: `orient:${worst.side}:todown`,
+      kind: "orientation",
+      text: { en: "Point your fingers DOWN — turn your palms toward the floor.", ru: "Направь пальцы ВНИЗ — ладони к полу." },
+      highlight: { side: worst.side },
+    };
+  }
+
   const worst = [...f.hands].sort((a, b) => Math.abs(b.pointing) - Math.abs(a.pointing))[0];
   const a = worst.pointing;
-  if (Math.abs(a) <= 45) return null;
   if (Math.abs(a) >= 120) {
-    return { key: `orient:${worst.side}:down`, kind: "orientation", message: `Point your ${worst.side} fingers up to the sky.`, highlight: { side: worst.side } };
+    return {
+      key: `orient:${worst.side}:down`,
+      kind: "orientation",
+      text: { en: `Point your ${worst.side} fingers up to the sky.`, ru: `Направь пальцы ${SIDE.ruGen[worst.side]} вверх.` },
+      highlight: { side: worst.side },
+    };
   }
   // Positive angle = tilted toward screen-right. For the player's right hand that is
   // "outward"; for the left hand it is "inward" (toward the body centre).
@@ -168,7 +263,10 @@ function orientationRule(def: SignDefinition, f: FrameFeatures): Correction | nu
   return {
     key: `orient:${worst.side}:${outward ? "in" : "out"}`,
     kind: "orientation",
-    message: `Rotate your ${worst.side} hand ${outward ? "inward" : "outward"} — fingers straight up.`,
+    text: {
+      en: `Rotate your ${worst.side} hand ${outward ? "inward" : "outward"} — fingers straight up.`,
+      ru: `Поверни ${SIDE.ruAcc[worst.side]} ${outward ? "внутрь" : "наружу"} — пальцы строго вверх.`,
+    },
     highlight: { side: worst.side },
   };
 }
@@ -188,6 +286,7 @@ export function getCorrection(def: SignDefinition, f: FrameFeatures): Correction
     if (kind === "size") c = sizeRule(def, f);
     else if (kind === "shape" || kind === "fingers") c = shapeAndFingerRules(def, f, kinds);
     else if (kind === "distance") c = distanceRule(def, f);
+    else if (kind === "stack") c = stackRule(def, f);
     else if (kind === "orientation") c = orientationRule(def, f);
     if (c) return c;
   }
