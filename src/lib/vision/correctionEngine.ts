@@ -26,7 +26,7 @@ import { HAND_SHAPES } from "./gestureDefinitions";
 import { bestAssignment, distanceFactor } from "./gestureScoring";
 
 /** Palm length (fraction of frame height) below which the hand is too small to read well. */
-export const MIN_PALM_SIZE = 0.075;
+export const MIN_PALM_SIZE = 0.06;
 
 /** Extension thresholds used to decide a finger is clearly in the wrong state. */
 const EXTENDED_OK = 0.55;
