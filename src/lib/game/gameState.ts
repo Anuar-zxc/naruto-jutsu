@@ -16,6 +16,10 @@ import { CHARACTERS, bossFor, damageMultiplier, mentorFor } from "./characters";
 import { CHAPTERS, jutsuForChapter } from "./story";
 import { LOCATIONS, QUICK_ROTATION, type Location } from "./locations";
 
+export const PLAYER_MAX_HP = 100;
+/** Seal holds in a row needed to "master" a seal in the dojo. */
+export const TRAIN_MASTERY = 3;
+
 export const emptyStats = (): GameStats => ({
   score: 0,
   combo: 0,
@@ -39,6 +43,10 @@ export const initialGameState = (): GameState => ({
   dialogue: null,
   bossHp: BOSS.maxHp,
   bossMaxHp: BOSS.maxHp,
+  playerHp: PLAYER_MAX_HP,
+  playerMaxHp: PLAYER_MAX_HP,
+  lastEnemyHit: null,
+  training: null,
   jutsuId: null,
   seqIndex: 0,
   timeLeftMs: 0,
@@ -52,7 +60,7 @@ export const initialGameState = (): GameState => ({
 
 const ALL_PHASES: Phase[] = [
   "CAMERA_CHECK", "READY", "MODE_SELECT", "CHARACTER_SELECT", "CHAPTER_SELECT", "DIALOGUE", "JUTSU_SELECTION",
-  "COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED", "VICTORY",
+  "COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED", "DEFEAT", "TRAINING", "VICTORY",
 ];
 
 /** Which actions are legal in which phase — anything else is ignored. */
@@ -67,8 +75,8 @@ const ALLOWED: Record<GameAction["type"], Phase[]> = {
   DIALOGUE_NEXT: ["DIALOGUE"],
   DIALOGUE_SKIP: ["DIALOGUE"],
   STORY_OUTRO: ["VICTORY"],
-  BACK_TO_CHAPTERS: ["JUTSU_SELECTION", "VICTORY", "FAILED"],
-  BACK_TO_MENU: ["CHARACTER_SELECT", "CHAPTER_SELECT", "JUTSU_SELECTION", "VICTORY"],
+  BACK_TO_CHAPTERS: ["JUTSU_SELECTION", "VICTORY", "FAILED", "DEFEAT"],
+  BACK_TO_MENU: ["CHARACTER_SELECT", "CHAPTER_SELECT", "JUTSU_SELECTION", "VICTORY", "DEFEAT", "TRAINING"],
   SELECT_JUTSU: ["JUTSU_SELECTION"],
   COUNTDOWN_TICK: ["COUNTDOWN"],
   TICK: ["PLAYING"],
@@ -79,8 +87,10 @@ const ALLOWED: Record<GameAction["type"], Phase[]> = {
   NEXT_ROUND_DONE: ["NEXT_ROUND"],
   RETRY: ["FAILED"],
   BACK_TO_SELECTION: ["FAILED", "COUNTDOWN"],
-  RESTART: ["VICTORY", "FAILED", "JUTSU_SELECTION"],
+  RESTART: ["VICTORY", "FAILED", "DEFEAT", "JUTSU_SELECTION"],
   QUIT: ALL_PHASES,
+  TRAIN_SELECT: ["TRAINING"],
+  TRAIN_HIT: ["TRAINING"],
 };
 
 export const COUNTDOWN_FROM = 3;
@@ -108,8 +118,27 @@ export function dialogueLines(s: GameState) {
   return CHAPTERS[s.chapter][s.dialogue.part];
 }
 
+/** How hard the enemy hits back when a jutsu fails (grows through the story). */
+export function enemyAttack(s: GameState): number {
+  if (s.mode === "story" && s.chapter != null) return 22 + Math.round((s.chapter / Math.max(1, CHAPTERS.length - 1)) * 20);
+  return 34;
+}
+
 function startFight(s: GameState): GameState {
-  return { ...s, phase: "JUTSU_SELECTION", round: 1, bossHp: s.bossMaxHp, stats: emptyStats(), jutsuId: null, seqIndex: 0, lastCast: null, dialogue: null };
+  return {
+    ...s,
+    phase: "JUTSU_SELECTION",
+    round: 1,
+    bossHp: s.bossMaxHp,
+    playerHp: PLAYER_MAX_HP,
+    playerMaxHp: PLAYER_MAX_HP,
+    lastEnemyHit: null,
+    stats: emptyStats(),
+    jutsuId: null,
+    seqIndex: 0,
+    lastCast: null,
+    dialogue: null,
+  };
 }
 
 function endDialogue(s: GameState): GameState {
@@ -131,11 +160,22 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
       return { ...s, phase: "MODE_SELECT" };
 
     case "SELECT_MODE":
+      if (a.mode === "training") return { ...s, mode: "training", phase: "TRAINING", training: { sign: "RAT", streak: 0, hits: 0, mastered: [] } };
       return { ...s, mode: a.mode, phase: "CHARACTER_SELECT" };
+
+    case "TRAIN_SELECT":
+      return { ...s, training: { ...s.training!, sign: a.sign, streak: 0 } };
+
+    case "TRAIN_HIT": {
+      const tr = s.training!;
+      const streak = tr.streak + 1;
+      const mastered = streak >= TRAIN_MASTERY && !tr.mastered.includes(tr.sign) ? [...tr.mastered, tr.sign] : tr.mastered;
+      return { ...s, eventId: s.eventId + 1, training: { ...tr, streak, hits: tr.hits + 1, mastered } };
+    }
 
     case "SELECT_CHARACTER":
       if (s.mode === "story") return { ...s, characterId: a.id, phase: "CHAPTER_SELECT" };
-      return { ...s, phase: "JUTSU_SELECTION", characterId: a.id, bossId: a.bossId ?? bossFor(a.id), bossHp: BOSS.maxHp, bossMaxHp: BOSS.maxHp };
+      return startFight({ ...s, characterId: a.id, bossId: a.bossId ?? bossFor(a.id), bossHp: BOSS.maxHp, bossMaxHp: BOSS.maxHp });
 
     case "CHANGE_CHARACTER":
       return { ...initialGameState(), mode: s.mode, phase: "CHARACTER_SELECT" };
@@ -192,7 +232,18 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
       const timeLeftMs = s.timeLeftMs - a.dt;
       const stats = { ...s.stats, playMs: s.stats.playMs + a.dt };
       if (timeLeftMs <= 0) {
-        return { ...s, timeLeftMs: 0, phase: "FAILED", stats: { ...stats, combo: 0, failedCount: stats.failedCount + 1 } };
+        // The enemy seizes the opening and strikes back.
+        const hit = Math.min(s.playerHp, enemyAttack(s));
+        const playerHp = s.playerHp - hit;
+        return {
+          ...s,
+          timeLeftMs: 0,
+          playerHp,
+          lastEnemyHit: { amount: hit, id: s.eventId + 1 },
+          eventId: s.eventId + 1,
+          phase: playerHp <= 0 ? "DEFEAT" : "FAILED",
+          stats: { ...stats, combo: 0, failedCount: stats.failedCount + 1 },
+        };
       }
       return { ...s, timeLeftMs, stats };
     }

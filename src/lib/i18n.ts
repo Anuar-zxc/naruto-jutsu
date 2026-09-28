@@ -167,6 +167,27 @@ export const STR = {
   continueStory: { ru: "ПРОДОЛЖИТЬ ИСТОРИЮ ▸", en: "CONTINUE STORY ▸" },
   theEnd: { ru: "ИСТОРИЯ ПРОЙДЕНА", en: "STORY COMPLETE" },
   shadowOf: { ru: "Тень: {name}", en: "Shadow {name}" },
+  // v5: player HP, defeat, dojo, records
+  yourHp: { ru: "ТВОЯ ЧАКРА", en: "YOUR CHAKRA" },
+  enemyStrikes: { ru: "{foe} контратакует: −{n}", en: "{foe} strikes back: −{n}" },
+  hpLeft: { ru: "Чакры осталось: {hp} / {max}", en: "Chakra left: {hp} / {max}" },
+  defeat: { ru: "ПОРАЖЕНИЕ", en: "DEFEAT" },
+  defeatSub: { ru: "{foe} оказался сильнее. Чакра иссякла — но настоящий шиноби встаёт снова.", en: "{foe} was stronger this time. Your chakra ran dry — but a true shinobi gets back up." },
+  defeatTip: { ru: "Совет: потренируй сложные печати в Додзё — там нет таймера.", en: "Tip: practise the tricky seals in the Dojo — no timer there." },
+  tryFightAgain: { ru: "РЕВАНШ", en: "REMATCH" },
+  toChapters: { ru: "К ГЛАВАМ", en: "CHAPTERS" },
+  toMenu: { ru: "В МЕНЮ", en: "MENU" },
+  dojoTitle: { ru: "ДОДЗЁ", en: "DOJO" },
+  dojoDesc: { ru: "Тренировка всех 12 печатей без таймера и урона. Живые подсказки, как исправить руки.", en: "Practise all 12 seals with no timer or damage. Live coaching on fixing your hands." },
+  dojoHeader: { ru: "ДОДЗЁ · ТРЕНИРОВКА ПЕЧАТЕЙ", en: "DOJO · SEAL TRAINING" },
+  dojoHint: { ru: "Сложи печать и удерживай, затем разожми руки и повтори. {n} раза подряд — печать освоена.", en: "Form the seal and hold it, then release and repeat. {n} in a row masters it." },
+  dojoStreak: { ru: "Серия: {s} / {n}", en: "Streak: {s} / {n}" },
+  dojoMastered: { ru: "Освоено: {m} / 12", en: "Mastered: {m} / 12" },
+  dojoDone: { ru: "ПЕЧАТЬ ОСВОЕНА!", en: "SEAL MASTERED!" },
+  dojoExit: { ru: "ЗАКОНЧИТЬ ТРЕНИРОВКУ", en: "LEAVE THE DOJO" },
+  newRecord: { ru: "НОВЫЙ РЕКОРД!", en: "NEW RECORD!" },
+  bestScore: { ru: "Рекорд: {n}", en: "Best: {n}" },
+  rowHpLeft: { ru: "ЧАКРА", en: "CHAKRA LEFT" },
 } satisfies Record<string, L>;
 
 export type StrKey = keyof typeof STR;

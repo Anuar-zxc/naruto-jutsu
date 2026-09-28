@@ -29,7 +29,8 @@ import { DebugOverlay } from "./DebugOverlay";
 import { GameHUD } from "./GameHUD";
 import { JutsuSelect } from "./JutsuSelect";
 import { JutsuSequence } from "./JutsuSequence";
-import { FailedPanel, ResultScreen } from "./ResultScreen";
+import { DefeatPanel, FailedPanel, ResultScreen } from "./ResultScreen";
+import { Dojo } from "./Dojo";
 
 const LS_MUTE = "shinobi.muted";
 const LS_MUSIC = "shinobi.music";
@@ -75,6 +76,7 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
   const [showResult, setShowResult] = useState(false);
   const [taunt, setTaunt] = useState<string | null>(null);
   const [musicOn, setMusicOn] = useState(true);
+  const [enemyHit, setEnemyHit] = useState<{ amount: number; key: number } | null>(null);
 
   // --- setup ------------------------------------------------------------------
   useEffect(() => {
@@ -170,6 +172,30 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
       setPop({ kanji: SIGNS[sign].kanji, points: g.lastPoints?.amount ?? 100, mult, key: g.eventId });
       if (g.stats.combo === 3 || g.stats.combo === 5) setComboPop({ mult, key: g.eventId });
     }
+    // Dojo: a successful seal hold.
+    if (g.training && p.training && g.training.hits > p.training.hits) {
+      const c = center(panelRef.current, 0.42);
+      fx.current?.seal(c.x, c.y, "chakra");
+      const sign = g.training.sign;
+      setPop({ kanji: SIGNS[sign].kanji, points: 0, mult: 1, key: g.eventId });
+      if (g.training.mastered.length > p.training.mastered.length) {
+        fx.current?.burst(c.x, c.y, { colors: ["#ffd166", "#ffffff", "#7cf2ff"], count: 120, speed: 10, size: 5, life: 60 });
+        fx.current?.ring(c.x, c.y, "#ffd166", { speed: 12, width: 6, life: 30 });
+      }
+    }
+
+    // Enemy counter-attack when a jutsu fails.
+    if (g.lastEnemyHit && g.lastEnemyHit.id !== p.lastEnemyHit?.id) {
+      const from = center(bossRef.current, 0.45);
+      const to = center(panelRef.current, 0.45);
+      fx.current?.projectile("chakra", from, to, 380, () => {
+        fx.current?.burst(to.x, to.y, { colors: ["#ff2d55", "#8b0000", "#ffffff"], count: 90, speed: 12, size: 5, life: 45 });
+        setFlash({ color: "#ff1a3c", key: Date.now() });
+        setEnemyHit({ amount: g.lastEnemyHit!.amount, key: Date.now() });
+        shake(true);
+      });
+    }
+
     if (g.stats.mistakes > p.stats.mistakes) {
       const c = center(panelRef.current, 0.42);
       fx.current?.mistake(c.x, c.y);
@@ -213,7 +239,8 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
       }, 700);
       setTimeout(() => setShowResult(true), 2300);
     }
-    if (g.phase === "JUTSU_SELECTION" || g.phase === "IDLE" || g.phase === "DIALOGUE" || g.phase === "CHAPTER_SELECT") {
+    if (g.phase === "DEFEAT") setTimeout(() => setShowResult(true), 1500);
+    if (["JUTSU_SELECTION", "IDLE", "DIALOGUE", "CHAPTER_SELECT", "MODE_SELECT", "TRAINING", "COUNTDOWN"].includes(g.phase)) {
       setShowResult(false);
       setDamage(null);
       if (g.phase !== "JUTSU_SELECTION") setTaunt(null);
@@ -245,10 +272,17 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
           {pop && (
             <div className="seal-pop" key={pop.key}>
               <span className="sp-kanji">{pop.kanji}</span>
-              <span className="sp-points">
-                +{pop.points}
-                {pop.mult > 1 && <em> ×{pop.mult}</em>}
-              </span>
+              {pop.points > 0 && (
+                <span className="sp-points">
+                  +{pop.points}
+                  {pop.mult > 1 && <em> ×{pop.mult}</em>}
+                </span>
+              )}
+            </div>
+          )}
+          {enemyHit && (
+            <div className="enemy-hit" key={enemyHit.key}>
+              −{enemyHit.amount}
             </div>
           )}
           {comboPop && (
@@ -260,6 +294,10 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
         </section>
 
         <section className="col-side">
+          {g.phase === "TRAINING" ? (
+            <Dojo />
+          ) : (
+          <>
           <Boss
             ref={bossRef}
             bossId={g.bossId}
@@ -274,6 +312,8 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
             taunt={taunt}
           />
           <CurrentSeal />
+          </>
+          )}
           {(g.phase === "CAMERA_CHECK" || g.phase === "READY") && (
             <div className="side-note">{t("sideNote")}</div>
           )}
@@ -305,6 +345,8 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
         </div>
       )}
       {g.phase === "VICTORY" && showResult && <ResultScreen onExit={quit} />}
+      {g.phase === "DEFEAT" && showResult && <DefeatPanel onExit={quit} />}
+      {g.phase === "DEFEAT" && <div className="defeat-vignette" aria-hidden />}
 
       <PhaseTransition phase={g.phase} />
       {flash && <div className="flash" key={flash.key} style={{ background: flash.color }} />}

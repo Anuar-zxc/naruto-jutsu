@@ -15,6 +15,7 @@ export default function ShinobiApp() {
   useEffect(() => {
     initLang();
     session.loadProgress();
+    session.loadRecords();
   }, [session]);
 
   const start = useCallback(() => {

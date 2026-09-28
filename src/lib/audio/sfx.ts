@@ -153,4 +153,21 @@ export class Sfx {
     this.tone(784, 0.1, { type: "square", gain: 0.1 });
     this.tone(1175, 0.18, { type: "square", gain: 0.1, delay: 0.07 });
   }
+
+  /** Enemy counter-attack landing on the player. */
+  enemyStrike() {
+    this.noise(0.35, { type: "bandpass", freq: 2200, to: 400, q: 2, gain: 0.45, attack: 0.01 });
+    this.tone(95, 0.45, { type: "sawtooth", gain: 0.2, to: 38 });
+    this.tone(60, 0.5, { type: "sine", gain: 0.45, to: 30, delay: 0.05 });
+  }
+
+  defeat() {
+    [392, 330, 262, 196, 131].forEach((f, i) => this.tone(f, 0.55, { type: "sawtooth", gain: 0.07, delay: i * 0.22 }));
+    this.tone(65, 1.6, { type: "sine", gain: 0.3, to: 40, delay: 0.2 });
+  }
+
+  /** Dojo: a seal mastered. */
+  mastered() {
+    [659, 784, 988, 1319].forEach((f, i) => this.tone(f, 0.3, { type: "triangle", gain: 0.13, delay: i * 0.07 }));
+  }
 }

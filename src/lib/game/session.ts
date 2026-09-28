@@ -10,7 +10,8 @@
  */
 import type { GameAction, GameState, Phase } from "@/types/game";
 import type { Correction, RecognitionFrame, SignId } from "@/types/gestures";
-import { gameReducer, initialGameState } from "./gameState";
+import { TRAIN_MASTERY, gameReducer, initialGameState } from "./gameState";
+import { rankFor } from "./scoring";
 import { JUTSU } from "./jutsu";
 import { isComboMilestone } from "./combo";
 import { Sfx } from "@/lib/audio/sfx";
@@ -22,6 +23,20 @@ import { getLang, t as tt, tr } from "@/lib/i18n";
 import { CHAPTERS } from "./story";
 
 const LS_PROGRESS = "shinobi.progress";
+const LS_RECORDS = "shinobi.records";
+const LS_DOJO = "shinobi.dojo";
+
+export interface RecordEntry {
+  score: number;
+  rank: string;
+}
+
+/** Outcome of the fight that just ended, compared with the stored record. */
+export interface RecordResult {
+  key: string;
+  best: RecordEntry | null;
+  isNew: boolean;
+}
 
 export type FeedbackTone = "hint" | "error";
 
@@ -138,6 +153,57 @@ export class GameSession {
     this.progressSubs.forEach((f) => f());
   }
 
+  // --- personal records (best score per battle), persisted per browser -------
+  private records: Record<string, RecordEntry> = {};
+  lastRecord: RecordResult | null = null;
+  getRecords = () => this.records;
+  loadRecords() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(LS_RECORDS) ?? "{}");
+      this.records = raw && typeof raw === "object" ? raw : {};
+    } catch {
+      this.records = {};
+    }
+  }
+  private recordKey(s: GameState) {
+    return s.mode === "story" && s.chapter != null ? `story:${s.chapter}` : "quick";
+  }
+  private commitRecord(s: GameState): RecordResult {
+    const key = this.recordKey(s);
+    const prev = this.records[key] ?? null;
+    const entry = { score: s.stats.score, rank: rankFor(s.stats) };
+    const isNew = !prev || entry.score > prev.score;
+    if (isNew) {
+      this.records = { ...this.records, [key]: entry };
+      try {
+        localStorage.setItem(LS_RECORDS, JSON.stringify(this.records));
+      } catch {
+        /* storage unavailable */
+      }
+    }
+    return { key, best: prev, isNew };
+  }
+
+  // --- dojo mastery ---------------------------------------------------------
+  private dojoMastered: SignId[] = [];
+  getDojoMastered = () => this.dojoMastered;
+  private loadDojo() {
+    try {
+      const v = JSON.parse(localStorage.getItem(LS_DOJO) ?? "[]");
+      this.dojoMastered = Array.isArray(v) ? v.filter((x): x is SignId => typeof x === "string" && x in SIGNS) : [];
+    } catch {
+      this.dojoMastered = [];
+    }
+  }
+  private saveDojo(list: SignId[]) {
+    this.dojoMastered = Array.from(new Set([...this.dojoMastered, ...list]));
+    try {
+      localStorage.setItem(LS_DOJO, JSON.stringify(this.dojoMastered));
+    } catch {
+      /* storage unavailable */
+    }
+  }
+
   attachRecognizer(r: GestureRecognizer) {
     this.recognizer = r;
   }
@@ -155,6 +221,28 @@ export class GameSession {
     }
     if (a.type === "MISTAKE") this.sfx.error();
     if (a.type === "COUNTDOWN_TICK" && next.phase === "COUNTDOWN") this.sfx.tick();
+    if (a.type === "TRAIN_HIT" && next.training) {
+      const tr0 = next.training;
+      const justMastered = tr0.streak === TRAIN_MASTERY;
+      if (justMastered) {
+        this.sfx.mastered();
+        this.saveDojo(tr0.mastered);
+        // Auto-advance to the next seal the player hasn't mastered yet.
+        const order = Object.keys(SIGNS) as SignId[];
+        const start = order.indexOf(tr0.sign);
+        const nextSign =
+          order.slice(start + 1).concat(order.slice(0, start)).find((x) => !tr0.mastered.includes(x) && !this.dojoMastered.includes(x)) ??
+          order[(start + 1) % order.length];
+        this.schedule(1100, () => {
+          if (this.state.phase === "TRAINING") this.dispatch({ type: "TRAIN_SELECT", sign: nextSign });
+        });
+      } else this.sfx.confirm(tr0.streak - 1);
+    }
+    if (a.type === "TRAIN_SELECT") {
+      this.recognizer?.reset();
+      this.stabilizer.reset();
+      this.lastProgressAt = performance.now();
+    }
 
     if (next.phase !== prev.phase) this.enterPhase(next.phase, prev.phase);
     this.stateSubs.forEach((f) => f());
@@ -214,9 +302,21 @@ export class GameSession {
         this.schedule(TIMING.nextRound, () => this.dispatch({ type: "NEXT_ROUND_DONE" }));
         break;
       case "FAILED":
-        this.sfx.fail();
+        this.sfx.enemyStrike();
+        this.schedule(450, () => this.sfx.fail());
+        break;
+      case "DEFEAT":
+        this.sfx.enemyStrike();
+        this.schedule(500, () => this.sfx.defeat());
+        break;
+      case "TRAINING":
+        this.loadDojo();
+        this.recognizer?.reset();
+        this.stabilizer.reset();
+        this.lastProgressAt = performance.now();
         break;
       case "VICTORY":
+        this.lastRecord = this.commitRecord(this.state);
         this.schedule(250, () => this.sfx.victory());
         if (this.state.mode === "story" && this.state.chapter != null) this.saveProgress(this.state.chapter + 1);
         break;
@@ -262,6 +362,8 @@ export class GameSession {
       }
     } else if (s.phase === "PLAYING" && s.jutsuId) {
       expected = this.handlePlaying(frame, t);
+    } else if (s.phase === "TRAINING" && s.training) {
+      expected = this.handleTraining(frame, t);
     }
 
     const detected = frame.hold?.sign ?? null;
@@ -336,6 +438,43 @@ export class GameSession {
     } else if (corr && (t - this.lastProgressAt > TIMING.hintDelay || corr.kind === "hands")) {
       this.setFeedback({ tone: "hint", title: tt("adjust"), message: tr(corr.text), key: `hint:${lang}:${corr.key}` });
       this.overlay.tone = "hint";
+      this.overlay.highlight = corr.highlight ?? null;
+    } else {
+      this.setFeedback(null);
+      this.overlay.tone = "idle";
+      this.overlay.highlight = null;
+    }
+    return expected;
+  }
+
+  /** Dojo: no timer, no mistakes — just the target seal and live coaching. */
+  private handleTraining(frame: RecognitionFrame, t: number): SignId {
+    const expected = this.state.training!.sign;
+    if (frame.accepted === expected) {
+      this.lastProgressAt = t;
+      this.stabilizer.reset();
+      this.setFeedback(null);
+      this.overlay.tone = "good";
+      this.overlay.highlight = null;
+      this.dispatch({ type: "TRAIN_HIT" });
+      return expected;
+    }
+    const raw = this.recognizer?.getCorrection(expected, frame.features) ?? null;
+    const corr = this.stabilizer.update(raw, t);
+    const lang = getLang();
+    if (frame.hold?.sign === expected) {
+      this.setFeedback(null);
+      this.overlay.tone = "good";
+      this.overlay.highlight = null;
+    } else if (corr && (t - this.lastProgressAt > 700 || corr.kind === "hands")) {
+      const wrong = frame.hold && frame.hold.progress >= 1 ? frame.hold.sign : null;
+      this.setFeedback({
+        tone: wrong ? "error" : "hint",
+        title: wrong ? tt("incorrect", { sign: tr(SIGNS[wrong].name).toUpperCase() }) : tt("adjust"),
+        message: tr(corr.text),
+        key: `dojo:${lang}:${wrong ?? ""}:${corr.key}`,
+      });
+      this.overlay.tone = wrong ? "error" : "hint";
       this.overlay.highlight = corr.highlight ?? null;
     } else {
       this.setFeedback(null);

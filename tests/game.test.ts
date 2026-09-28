@@ -4,7 +4,7 @@
  * REAL recognizer.
  */
 import assert from "node:assert/strict";
-import { availableJutsu, dialogueLines, gameReducer, initialGameState } from "../src/lib/game/gameState";
+import { PLAYER_MAX_HP, TRAIN_MASTERY, availableJutsu, dialogueLines, enemyAttack, gameReducer, initialGameState } from "../src/lib/game/gameState";
 import { JUTSU, JUTSU_LIST } from "../src/lib/game/jutsu";
 import { rankFor, accuracy } from "../src/lib/game/scoring";
 import { comboMultiplier } from "../src/lib/game/combo";
@@ -180,6 +180,50 @@ async function main() {
     assert.equal(kak.bossId, "jiraiya", "mentor is never the player");
   });
 
+  await test("enemy counter-attack: each failed jutsu costs chakra, empty chakra → DEFEAT → rematch", () => {
+    let s = quick();
+    assert.equal(s.playerHp, PLAYER_MAX_HP);
+    const hit = enemyAttack(s);
+    let fails = 0;
+    while (s.phase !== "DEFEAT" && fails < 10) {
+      s = reduce(s, { type: "SELECT_JUTSU", id: "CHIDORI" }, ...go, { type: "TICK", dt: 60000 });
+      fails++;
+      if (s.phase === "FAILED") {
+        assert.equal(s.playerHp, PLAYER_MAX_HP - hit * fails);
+        assert.equal(s.lastEnemyHit?.amount, hit);
+        s = reduce(s, { type: "BACK_TO_SELECTION" });
+      }
+    }
+    assert.equal(s.phase, "DEFEAT");
+    assert.equal(s.playerHp, 0);
+    assert.equal(fails, Math.ceil(PLAYER_MAX_HP / hit));
+    assert.equal(reduce(s, { type: "SIGN", sign: "OX" }), s, "no input accepted after defeat");
+    s = reduce(s, { type: "RESTART" });
+    assert.equal(s.phase, "JUTSU_SELECTION");
+    assert.equal(s.playerHp, PLAYER_MAX_HP);
+    assert.equal(s.bossHp, s.bossMaxHp);
+  });
+
+  await test("story enemies hit harder in later chapters", () => {
+    const at = (ch: number) => enemyAttack({ ...initialGameState(), mode: "story", chapter: ch });
+    assert.ok(at(0) < at(CHAPTERS.length - 1));
+    assert.ok(Math.ceil(PLAYER_MAX_HP / at(CHAPTERS.length - 1)) >= 3, "at least 3 mistakes allowed even in the finale");
+  });
+
+  await test("dojo: training mode, streak → mastery, free seal choice, back to menu", () => {
+    let s = reduce(menu(), { type: "SELECT_MODE", mode: "training" });
+    assert.equal(s.phase, "TRAINING");
+    assert.equal(s.training?.sign, "RAT");
+    for (let i = 0; i < TRAIN_MASTERY; i++) s = reduce(s, { type: "TRAIN_HIT" });
+    assert.deepEqual(s.training?.mastered, ["RAT"]);
+    s = reduce(s, { type: "TRAIN_SELECT", sign: "DOG" });
+    assert.equal(s.training?.sign, "DOG");
+    assert.equal(s.training?.streak, 0);
+    assert.equal(reduce(s, { type: "SELECT_JUTSU", id: "CHIDORI" }), s, "no jutsu in the dojo");
+    s = reduce(s, { type: "BACK_TO_MENU" });
+    assert.equal(s.phase, "MODE_SELECT");
+  });
+
   await test("session end-to-end with synthetic camera: calibration → Chidori with an error-mode correction", async () => {
     setLang("en");
     Object.assign(TIMING, { readyToSelection: 20, countdownStep: 20, successCharge: 20, castImpact: 5, castDuration: 20, nextRound: 20, calibrationHold: 150 });
@@ -227,6 +271,39 @@ async function main() {
     const st = session.getState();
     assert.ok(["JUTSU_CAST", "NEXT_ROUND", "JUTSU_SELECTION"].includes(st.phase), st.phase);
     assert.equal(st.bossHp, 1000 - 220);
+    session.destroy();
+  });
+
+  await test("session dojo with synthetic camera: hold/release ×3 masters the seal and auto-advances", async () => {
+    const rec = new GestureRecognizer();
+    const session = new GameSession();
+    session.attachRecognizer(rec);
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const hold = async (sign: SignId | null, ms: number) => {
+      const end = performance.now() + ms;
+      while (performance.now() < end) {
+        const t = performance.now();
+        const raw = sign ? syntheticFrame(poseForSign(sign), t, 16 / 9, Math.floor(t)) : { hands: [], aspect: 16 / 9, t };
+        session.onFrame(rec.process(raw));
+        await sleep(16);
+      }
+    };
+    session.dispatch({ type: "START" });
+    await hold("MONKEY", 300);
+    await sleep(60);
+    session.dispatch({ type: "SELECT_MODE", mode: "training" });
+    session.dispatch({ type: "TRAIN_SELECT", sign: "TIGER" });
+    // Wrong seal → coaching feedback, no progress.
+    await hold("SNAKE", 1300);
+    assert.equal(session.getState().training?.streak, 0);
+    assert.ok(session.getLive().feedback, "coaching shown for a wrong seal");
+    for (let i = 0; i < TRAIN_MASTERY; i++) {
+      await hold("TIGER", 450);
+      await hold(null, 250);
+    }
+    assert.ok(session.getState().training?.mastered.includes("TIGER"));
+    await sleep(1200);
+    assert.notEqual(session.getState().training?.sign, "TIGER", "auto-advanced to the next seal");
     session.destroy();
   });
 

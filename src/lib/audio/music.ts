@@ -310,7 +310,7 @@ export class MusicPlayer {
 export function trackFor(phase: string, bossHp: number, bossMaxHp: number): TrackId | null {
   if (phase === "IDLE") return null;
   if (phase === "VICTORY") return "victory";
-  if (phase === "DIALOGUE") return "dialogue";
+  if (phase === "DIALOGUE" || phase === "TRAINING" || phase === "DEFEAT") return "dialogue";
   if (["COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED", "JUTSU_SELECTION"].includes(phase)) {
     return bossHp <= bossMaxHp * 0.35 ? "boss" : "battle";
   }

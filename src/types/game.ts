@@ -17,11 +17,13 @@ export type Phase =
   | "JUTSU_CAST"
   | "NEXT_ROUND"
   | "FAILED"
+  | "DEFEAT"
+  | "TRAINING"
   | "VICTORY";
 
 export type Element = "fire" | "water" | "lightning" | "chakra";
 export type JutsuId = "HENGE" | "KAWARIMI" | "KAGE_BUNSHIN" | "GOKAKYU" | "CHIDORI" | "RYUKA" | "SUIRYUDAN" | "HOSENKA" | "KUCHIYOSE";
-export type GameMode = "story" | "quick";
+export type GameMode = "story" | "quick" | "training";
 
 export interface Jutsu {
   id: JutsuId;
@@ -73,6 +75,13 @@ export interface GameState {
   dialogue: { part: "intro" | "outro"; index: number } | null;
   bossHp: number;
   bossMaxHp: number;
+  /** Player chakra/health: the enemy strikes back when a jutsu fails. */
+  playerHp: number;
+  playerMaxHp: number;
+  /** Damage of the last enemy counter-attack (for the UI). */
+  lastEnemyHit: { amount: number; id: number } | null;
+  /** Dojo (training mode): current target seal, streak and mastered seals. */
+  training: { sign: SignId; streak: number; mastered: SignId[]; hits: number } | null;
   jutsuId: JutsuId | null;
   seqIndex: number;
   timeLeftMs: number;
@@ -110,6 +119,8 @@ export type GameAction =
   | { type: "RETRY" }
   | { type: "BACK_TO_SELECTION" }
   | { type: "RESTART" }
-  | { type: "QUIT" };
+  | { type: "QUIT" }
+  | { type: "TRAIN_SELECT"; sign: SignId }
+  | { type: "TRAIN_HIT" };
 
 export type Rank = "S" | "A" | "B" | "C";

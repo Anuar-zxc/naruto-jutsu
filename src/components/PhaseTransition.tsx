@@ -11,6 +11,8 @@ const SCENE_KANJI: Partial<Record<Phase, string>> = {
   DIALOGUE: "語",
   JUTSU_SELECTION: "術",
   VICTORY: "勝",
+  TRAINING: "修",
+  DEFEAT: "敗",
 };
 
 /**

@@ -2795,3 +2795,233 @@ body::after {
 .boss.shadow .boss-img {
   filter: grayscale(0.6) brightness(0.7) drop-shadow(0 0 18px rgba(120, 60, 255, 0.8));
 }
+
+/* ==========================================================================
+   v5 · player chakra, enemy counter-attack, defeat, dojo, records
+   ========================================================================== */
+.mode-cards { grid-template-columns: repeat(3, minmax(0, 300px)); }
+.mode-card.dojo {
+  background:
+    radial-gradient(circle at 85% 0%, rgba(255, 193, 94, 0.3), transparent 60%),
+    linear-gradient(180deg, #1a160e, #0b0906);
+  animation-delay: 0.16s;
+}
+.mode-card.dojo:hover { box-shadow: 0 20px 50px -14px rgba(255, 193, 94, 0.75); }
+.mode-meta {
+  margin-top: 14px;
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+  background: rgba(0, 0, 0, 0.3);
+}
+@media (max-width: 1100px) {
+  .mode-cards { grid-template-columns: 1fr; width: min(440px, 100%); }
+  .mode-card { min-height: 0; }
+}
+
+/* player chakra bar in the HUD */
+.hud-hero .player-hp {
+  position: relative;
+  width: 150px;
+  height: 14px;
+  margin: 4px 0 2px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(46, 197, 255, 0.45);
+  overflow: hidden;
+}
+.player-hp-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, #1b8cff, #2ec5ff 60%, #b8f1ff);
+  box-shadow: 0 0 12px rgba(46, 197, 255, 0.8);
+  transition: width 0.5s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.player-hp.low { border-color: rgba(230, 57, 70, 0.7); animation: hp-pulse 0.9s ease-in-out infinite; }
+.player-hp.low .player-hp-fill { background: linear-gradient(90deg, #8b0000, var(--red)); box-shadow: 0 0 12px rgba(230, 57, 70, 0.9); }
+.hud-hero .player-hp span {
+  position: relative;
+  display: block !important;
+  font-size: 10px;
+  line-height: 13px;
+  padding-left: 8px;
+  letter-spacing: 0.12em;
+  color: #fff;
+  text-shadow: 0 1px 2px #000;
+}
+@keyframes hp-pulse { 50% { box-shadow: 0 0 14px rgba(230, 57, 70, 0.8); } }
+@media (max-width: 760px) { .hud-hero .player-hp { width: 96px; } }
+
+/* enemy counter-attack number over the camera */
+.enemy-hit {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  z-index: 60;
+  pointer-events: none;
+  font-family: var(--font-display);
+  font-size: clamp(64px, 10vw, 140px);
+  color: #ff2d55;
+  -webkit-text-stroke: 2px #2a0008;
+  text-shadow: 0 0 30px rgba(255, 0, 60, 0.9), 0 6px 0 #3a0010;
+  animation: enemy-hit 1.4s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+}
+@keyframes enemy-hit {
+  0% { transform: translate(-50%, -30%) scale(2.2) rotate(-8deg); opacity: 0; }
+  12% { transform: translate(-50%, -50%) scale(1) rotate(-4deg); opacity: 1; }
+  70% { opacity: 1; }
+  100% { transform: translate(-50%, -110%) scale(0.9) rotate(-4deg); opacity: 0; }
+}
+.failed-strike {
+  margin: 14px auto 4px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(230, 57, 70, 0.45);
+  background: rgba(230, 57, 70, 0.12);
+  display: grid;
+  gap: 4px;
+}
+.failed-strike b { font-family: var(--font-display); font-size: 22px; letter-spacing: 0.08em; color: #ff5a6a; }
+.failed-strike span { font-size: 14px; color: var(--muted); font-weight: 700; }
+
+/* defeat */
+.defeat-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 30%, rgba(90, 0, 15, 0.75) 100%);
+  animation: fade-in 0.8s ease-out both;
+  filter: saturate(0.4);
+}
+.result.defeat .result-card { border-color: rgba(230, 57, 70, 0.5); }
+.defeat-card .result-head { color: #ff4d5e; }
+.defeat-kanji {
+  font-family: var(--font-kanji);
+  font-weight: 900;
+  font-size: 92px;
+  line-height: 1;
+  color: var(--red);
+  text-shadow: 0 0 40px rgba(230, 57, 70, 0.7);
+  animation: stamp-in 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.defeat-foe { filter: drop-shadow(0 0 30px rgba(230, 57, 70, 0.6)); }
+.defeat-tip {
+  margin: 12px 0 4px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--gold);
+}
+@keyframes stamp-in { from { transform: scale(2.4) rotate(-12deg); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* records */
+.new-record {
+  margin: 6px auto 2px;
+  font-family: var(--font-display);
+  font-size: 26px;
+  letter-spacing: 0.16em;
+  background: linear-gradient(90deg, var(--gold), #fff, var(--gold));
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 1.6s linear infinite, stamp-in 0.6s 0.3s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.record-line { font-size: 14px; font-weight: 700; color: var(--muted); margin-top: 4px; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+/* dojo */
+.dojo {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 193, 94, 0.3);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(255, 193, 94, 0.14), transparent 55%),
+    var(--panel);
+  backdrop-filter: blur(10px);
+  min-height: 0;
+  overflow: auto;
+}
+.dojo-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.dojo-head span { font-family: var(--font-display); letter-spacing: 0.16em; font-size: 20px; color: var(--gold); }
+.dojo-head b { font-size: 13px; letter-spacing: 0.08em; color: var(--muted); }
+.dojo-target {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line-2);
+  background: rgba(0, 0, 0, 0.35);
+  animation: rise 0.35s ease-out both;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.dojo-target.done { border-color: var(--gold); box-shadow: 0 0 30px -6px rgba(255, 193, 94, 0.7); }
+.dojo-kanji { font-family: var(--font-kanji); font-weight: 900; font-size: 64px; line-height: 1; color: var(--gold); }
+.dojo-name { font-family: var(--font-display); font-size: 30px; letter-spacing: 0.12em; line-height: 1; }
+.dojo-how { font-size: 14px; color: var(--muted); font-weight: 600; margin-top: 4px; }
+.dojo-streak { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+.dojo-streak i {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid rgba(255, 193, 94, 0.5);
+  transition: background 0.2s, transform 0.2s;
+}
+.dojo-streak i.on { background: var(--gold); box-shadow: 0 0 10px var(--gold); transform: scale(1.15); }
+.dojo-streak span { margin-left: 6px; font-size: 13px; font-weight: 800; letter-spacing: 0.08em; color: var(--gold); }
+.dojo-hold { height: 5px; margin-top: 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.dojo-hold div { height: 100%; background: linear-gradient(90deg, var(--gold), #fff); transition: width 0.08s linear; }
+.dojo-hint { margin: 0; font-size: 13px; color: var(--muted); font-weight: 600; }
+.dojo-board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.dojo-cell {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s, background 0.15s;
+}
+.dojo-cell:hover { transform: translateY(-2px); border-color: rgba(255, 193, 94, 0.6); }
+.dojo-cell.active { border-color: var(--gold); background: rgba(255, 193, 94, 0.14); }
+.dojo-cell.mastered .dc-kanji { color: var(--gold); }
+.dc-kanji { font-family: var(--font-kanji); font-weight: 900; font-size: 24px; line-height: 1.1; }
+.dc-name { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: var(--muted); }
+.dc-check {
+  position: absolute; top: 3px; right: 5px;
+  font-size: 11px; font-weight: 900; color: var(--gold);
+}
+.dojo-exit { align-self: flex-start; }
+@media (max-width: 760px) {
+  .dojo-target { grid-template-columns: auto 1fr; }
+  .dojo-target svg { display: none; }
+  .dojo-board { grid-template-columns: repeat(6, 1fr); }
+  .dc-name { display: none; }
+}
+/* let the enemy's counter-attack land before the "failed" card appears */
+.modal.modal-delayed { animation: fade-in 0.35s 0.95s both; }
+.modal.modal-delayed .modal-card { animation-delay: 0.95s; }
+.hud { min-width: 0; }
+@media (max-width: 480px) {
+  .hud-actions { gap: 4px; }
+  .hud-actions .icon-btn { width: 34px; height: 34px; }
+}
+.hud-hero .player-hp span { white-space: nowrap; overflow: hidden; }
+@media (max-width: 760px) {
+  .hud { flex-wrap: wrap; row-gap: 6px; }
+  .hud-hero { margin-right: auto; min-width: 0; }
+  .hud-stats { order: 3; width: 100%; justify-content: space-around; }
+}

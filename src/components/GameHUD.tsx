@@ -34,10 +34,17 @@ export function GameHUD({ muted, onToggleMute, musicOn, onToggleMusic, debug, on
           <Portrait ch={hero} className="hud-hero-img" />
           <div>
             <b>{tr(hero.name).toUpperCase()}</b>
+            {g.mode !== "training" && (
+              <div className={`player-hp ${g.playerHp / g.playerMaxHp <= 0.34 ? "low" : ""}`} title={t("yourHp")} data-hp={g.playerHp}>
+                <div className="player-hp-fill" style={{ width: `${(g.playerHp / g.playerMaxHp) * 100}%` }} />
+                <span>{t("yourHp")} {g.playerHp}</span>
+              </div>
+            )}
             <span>{tr(hero.perk)}</span>
           </div>
         </div>
       )}
+      {g.mode !== "training" && (
       <div className="hud-stats">
         <div className="hud-stat">
           <span className="hud-k">{t("round")}</span>
@@ -57,6 +64,7 @@ export function GameHUD({ muted, onToggleMute, musicOn, onToggleMusic, debug, on
           </span>
         </div>
       </div>
+      )}
       <div className="hud-actions">
         <LangToggle />
         <button className={`icon-btn ${debug ? "on" : ""}`} onClick={onToggleDebug} title={t("debugTitle")}>

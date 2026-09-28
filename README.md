@@ -76,6 +76,9 @@ Damage and time scale with the number of seals: 3 seals give 220 damage in 13 s,
 
 - **Story:** 12 chapters across 9 locations and 11 villains: Kisame, Hidan, Itachi, Konan, Pain, Obito, Obito (Ten-Tails), Madara, Madara (Six Paths), Kawaki and Isshiki. Chapter 1 is a sparring match with the mentor. Each chapter has visual-novel dialogue before and after the fight (typewriter text, active-speaker highlight; skip with Esc or the button). A villain taunts you when their HP drops below half. New jutsu unlock as you progress, and progress is saved in the browser.
 - **Quick battle:** every jutsu unlocked, against a random villain. Takes about 2 minutes, which makes it the best mode for a demo.
+- **Dojo (修行):** practise any of the 12 seals with no timer and no damage. Error Mode coaches you live; hold → release three times in a row to master a seal, then the dojo moves you to the next one. Mastery is saved in the browser.
+- **The enemy strikes back:** you have 100 chakra. When a jutsu times out, the villain counter-attacks (22 in chapter 1, up to 42 in the finale; 34 in quick battle). At 0 chakra you get **DEFEAT**, with a rematch, a return to the chapters or menu, and a tip to train in the dojo.
+- **Personal records:** the best score for quick battle and for each story chapter is saved. The result screen shows **NEW RECORD!** or your previous best.
 - **24 playable characters**, each with a perk (extra time, or a damage bonus to an element or to everything). If you fight as a villain who is also the chapter boss, you face their "Shadow".
 - **Russian / English:** the whole UI switches with the RU / EN toggle, including every Error Mode correction ("Выпрями средние пальцы на обеих руках."). The language is detected automatically and remembered.
 
@@ -168,7 +171,7 @@ npm run dev        # http://localhost:3000
 Other commands:
 
 ```bash
-npm test           # 42 tests: features, all 12 seals, smoothing, every correction path, story + quick game flow
+npm test           # 46 tests: features, all 12 seals, smoothing, every correction path, story + quick game flow, counter-attack/defeat, dojo
 npm run typecheck
 npm run build && npm start
 ```
