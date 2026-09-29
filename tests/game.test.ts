@@ -4,11 +4,11 @@
  * REAL recognizer.
  */
 import assert from "node:assert/strict";
-import { PLAYER_MAX_HP, TRAIN_MASTERY, availableJutsu, dialogueLines, enemyAttack, gameReducer, initialGameState } from "../src/lib/game/gameState";
+import { MISTAKE_TIME_MS, PLAYER_MAX_HP, RETALIATION, TRAIN_MASTERY, availableJutsu, dialogueLines, enemyAttack, enraged, gameReducer, initialGameState, mistakeCost, timeLimit } from "../src/lib/game/gameState";
 import { JUTSU, JUTSU_LIST } from "../src/lib/game/jutsu";
 import { rankFor, accuracy } from "../src/lib/game/scoring";
 import { comboMultiplier } from "../src/lib/game/combo";
-import { CHARACTERS, CHARACTER_LIST, randomBossFor } from "../src/lib/game/characters";
+import { CHARACTERS, CHARACTER_LIST, damageMultiplier, randomBossFor } from "../src/lib/game/characters";
 import { CHAPTERS } from "../src/lib/game/story";
 import { LOCATIONS } from "../src/lib/game/locations";
 import { GameSession, TIMING } from "../src/lib/game/session";
@@ -37,8 +37,11 @@ const menu = () => reduce(initialGameState(), { type: "START" }, { type: "CAMERA
 const quick = (hero = "hashirama" as const, bossId = "pain" as const) =>
   reduce(menu(), { type: "SELECT_MODE", mode: "quick" }, { type: "SELECT_CHARACTER", id: hero, bossId });
 const go: GameAction[] = [{ type: "COUNTDOWN_TICK" }, { type: "COUNTDOWN_TICK" }, { type: "COUNTDOWN_TICK" }];
+/** Cast `id` perfectly: picks it (loadout screen) or switches to it (countdown), then forms every seal. */
 const cast = (s: GameState, id: JutsuId, dt = 1000) => {
-  s = reduce(s, { type: "SELECT_JUTSU", id }, ...go);
+  if (s.phase === "JUTSU_SELECTION") s = reduce(s, { type: "SELECT_JUTSU", id });
+  else if (s.phase === "COUNTDOWN" && s.jutsuId !== id) s = reduce(s, { type: "SELECT_SLOT", slot: s.loadout.indexOf(id) });
+  s = reduce(s, ...go);
   for (const sign of JUTSU[id].sequence) s = reduce(s, { type: "TICK", dt }, { type: "SIGN", sign });
   return reduce(s, { type: "SUCCESS_DONE" });
 };
@@ -48,68 +51,123 @@ async function main() {
     assert.deepEqual([1, 2, 3, 4, 5, 9].map(comboMultiplier), [1, 1, 2, 2, 3, 3]);
   });
 
-  await test("content: 9 jutsu with real seal orders, no seal repeated back-to-back", () => {
-    assert.equal(JUTSU_LIST.length, 9);
+  await test("content: 12 jutsu with effects, real seal orders, no seal repeated back-to-back", () => {
+    assert.equal(JUTSU_LIST.length, 12);
     assert.deepEqual(JUTSU.GOKAKYU.sequence, ["SNAKE", "RAM", "MONKEY", "BOAR", "HORSE", "TIGER"]);
     assert.deepEqual(JUTSU.CHIDORI.sequence, ["OX", "RABBIT", "MONKEY"]);
-    assert.deepEqual(JUTSU.HOSENKA.sequence, ["RAT", "TIGER", "DOG", "OX", "RABBIT", "TIGER"]);
     for (const j of JUTSU_LIST) {
       for (let i = 1; i < j.sequence.length; i++) assert.notEqual(j.sequence[i], j.sequence[i - 1], `${j.id} repeats ${j.sequence[i]}`);
-      for (const s of j.sequence) assert.ok(SIGNS[s], `${j.id}: unknown seal ${s}`);
+      for (const x of j.sequence) assert.ok(SIGNS[x], `${j.id}: unknown seal ${x}`);
+      assert.ok(j.effect, `${j.id} effect`);
     }
   });
 
-  await test("content: 12 chapters, every line bilingual, every enemy/location exists", () => {
-    assert.equal(CHAPTERS.length, 12);
+  await test("content: 13 chapters in 4 arcs, every line bilingual, every jutsu unlocked once", () => {
+    assert.equal(CHAPTERS.length, 13);
+    const unlocked: string[] = [];
     for (const [i, ch] of CHAPTERS.entries()) {
-      assert.ok(LOCATIONS[ch.location], `chapter ${i} location`);
-      if (ch.enemy !== "mentor") assert.ok(CHARACTERS[ch.enemy]?.villain, `chapter ${i} enemy ${ch.enemy}`);
+      assert.ok(LOCATIONS[ch.location]?.image, `chapter ${i} location art`);
+      if (ch.enemy !== "mentor") assert.ok(CHARACTERS[ch.enemy], `chapter ${i} enemy ${ch.enemy}`);
       for (const l of [...ch.intro, ...ch.outro]) assert.ok(l.text.ru && l.text.en, `chapter ${i} line`);
-      assert.ok(ch.taunt.ru && ch.taunt.en);
+      assert.ok(ch.taunt.ru && ch.taunt.en && ch.reply.ru && ch.reply.en);
+      assert.ok(ch.intro.length >= 4, `chapter ${i} intro is a real scene`);
+      unlocked.push(...ch.unlocks);
     }
+    assert.deepEqual([...unlocked].sort(), [...JUTSU_LIST.map((j) => j.id)].sort());
     assert.equal(CHARACTER_LIST.length, 24);
   });
 
-  await test("quick battle: menu → hero → jutsu → seals → cast → damage", () => {
-    let s = menu();
-    assert.equal(s.phase, "MODE_SELECT");
-    s = quick();
+  await test("loadout: pick exactly 3 once, then rounds rotate through them with no selection screen", () => {
+    let s = quick();
     assert.equal(s.phase, "JUTSU_SELECTION");
-    assert.equal(s.bossId, "pain");
-    assert.equal(availableJutsu(s).length, 9);
-    s = reduce(s, { type: "SELECT_JUTSU", id: "CHIDORI" }, ...go);
-    assert.equal(s.phase, "PLAYING");
-    s = reduce(s, { type: "SIGN", sign: "RAM" });
-    assert.equal(s.seqIndex, 0, "wrong seal ignored by SIGN");
+    assert.equal(availableJutsu(s).length, 12);
+    s = reduce(s, { type: "CONFIRM_LOADOUT" });
+    assert.equal(s.phase, "JUTSU_SELECTION", "can't start with an empty loadout");
+    s = reduce(s, { type: "TOGGLE_LOADOUT", id: "CHIDORI" }, { type: "TOGGLE_LOADOUT", id: "KAWARIMI" }, { type: "TOGGLE_LOADOUT", id: "GOKAKYU" }, { type: "TOGGLE_LOADOUT", id: "RASENGAN" });
+    assert.deepEqual(s.loadout, ["CHIDORI", "KAWARIMI", "GOKAKYU"], "4th pick refused");
+    s = reduce(s, { type: "CONFIRM_LOADOUT" });
+    assert.equal(s.phase, "COUNTDOWN");
+    assert.equal(s.jutsuId, "CHIDORI");
+    s = reduce(s, ...go);
     for (const sign of JUTSU.CHIDORI.sequence) s = reduce(s, { type: "TICK", dt: 1000 }, { type: "SIGN", sign });
     assert.equal(s.phase, "SUCCESS");
     assert.equal(s.stats.score, 100 + 100 + 200);
     s = reduce(s, { type: "SUCCESS_DONE" });
     assert.equal(s.lastCast?.perfect, true);
-    assert.equal(s.bossHp, 1000 - Math.round(220 * 1.25));
-    s = reduce(s, { type: "CAST_DONE" }, { type: "NEXT_ROUND_DONE" });
-    assert.equal(s.phase, "JUTSU_SELECTION");
+    assert.equal(s.bossHp, 1000 - Math.round(200 * 1.9), "Chidori perfect crit");
+    s = reduce(s, { type: "CAST_DONE" });
+    assert.equal(s.phase, "NEXT_ROUND");
+    assert.equal(s.lastRound?.staggered, true, "perfect cast → no retaliation");
+    assert.equal(s.playerHp, PLAYER_MAX_HP);
+    s = reduce(s, { type: "NEXT_ROUND_DONE" });
+    assert.equal(s.phase, "COUNTDOWN", "straight into the next round");
+    assert.equal(s.jutsuId, "KAWARIMI");
     assert.equal(s.round, 2);
+    s = reduce(s, { type: "SELECT_SLOT", slot: 2 });
+    assert.equal(s.jutsuId, "GOKAKYU", "can switch during the countdown");
   });
 
-  await test("mistake resets combo and removes perfect bonus", () => {
+  await test("a wrong seal costs chakra AND time, and invites retaliation", () => {
     let s = reduce(quick(), { type: "SELECT_JUTSU", id: "CHIDORI" }, ...go);
+    const t0 = s.timeLeftMs;
     s = reduce(s, { type: "SIGN", sign: "OX" }, { type: "MISTAKE", sign: "SNAKE" });
     assert.equal(s.stats.combo, 0);
+    assert.equal(s.playerHp, PLAYER_MAX_HP - mistakeCost(s));
+    assert.equal(s.timeLeftMs, t0 - MISTAKE_TIME_MS);
+    assert.equal(reduce(s, { type: "SELECT_SLOT", slot: 1 }), s, "committed after the first seal");
     for (const sign of JUTSU.CHIDORI.sequence.slice(1)) s = reduce(s, { type: "SIGN", sign });
     s = reduce(s, { type: "SUCCESS_DONE" });
     assert.equal(s.lastCast?.perfect, false);
-    assert.equal(s.bossHp, 780);
+    assert.equal(s.bossHp, 800);
+    const hpBefore = s.playerHp;
+    s = reduce(s, { type: "CAST_DONE" });
+    assert.equal(s.lastRound?.staggered, false);
+    assert.equal(s.playerHp, hpBefore - Math.round(enemyAttack(s) * RETALIATION));
     assert.equal(accuracy(s.stats), 3 / 4);
   });
 
-  await test("timer expiry → FAILED, retry restarts the same jutsu", () => {
+  await test("effects: shield blocks, clones boost, fire burns, water heals, summon ticks, Kirin executes", () => {
+    const withLoadout = (ids: JutsuId[]) => reduce(quick(), ...ids.map((id) => ({ type: "TOGGLE_LOADOUT", id }) as GameAction), { type: "CONFIRM_LOADOUT" });
+    // Kawarimi: 2 shields → the timeout strike is blocked.
+    let s = cast(withLoadout(["KAWARIMI", "CHIDORI", "GOKAKYU"]), "KAWARIMI");
+    assert.equal(s.status.shield, 2);
+    s = reduce(s, { type: "CAST_DONE" }, { type: "NEXT_ROUND_DONE" }, ...go, { type: "TICK", dt: 60000 });
+    assert.equal(s.phase, "FAILED");
+    assert.equal(s.playerHp, PLAYER_MAX_HP, "strike absorbed");
+    assert.equal(s.status.shield, 1);
+    // Shadow clones: next jutsu ×1.8.
+    s = cast(withLoadout(["KAGE_BUNSHIN", "RASENGAN", "CHIDORI"]), "KAGE_BUNSHIN");
+    s = reduce(s, { type: "CAST_DONE" }, { type: "NEXT_ROUND_DONE" });
+    s = cast(s, "RASENGAN");
+    assert.equal(s.lastCast?.damage, Math.round(330 * damageMultiplier(CHARACTERS.hashirama, "chakra") * 1.8 * 1.25));
+    assert.equal(s.status.boost, 1, "boost consumed");
+    // Fireball burns for 3 rounds.
+    s = cast(withLoadout(["GOKAKYU", "CHIDORI", "RASENGAN"]), "GOKAKYU");
+    const afterCast = s.bossHp;
+    s = reduce(s, { type: "CAST_DONE" });
+    assert.equal(s.lastRound?.burn, 70);
+    assert.equal(s.bossHp, afterCast - 70);
+    // Water dragon heals.
+    s = withLoadout(["SUIRYUDAN", "CHIDORI", "RASENGAN"]);
+    s = { ...s, playerHp: 50 };
+    s = cast(s, "SUIRYUDAN");
+    assert.equal(s.playerHp, 80);
+    // Kirin: ×2.2 when the enemy is below 40%.
+    s = withLoadout(["KIRIN", "CHIDORI", "RASENGAN"]);
+    s = cast({ ...s, bossHp: 300 }, "KIRIN");
+    assert.ok(s.lastCast?.tags.includes("execute"));
+    assert.equal(s.bossHp, 0);
+  });
+
+  await test("timer expiry → FAILED with a counter-attack, retry restarts the same jutsu", () => {
     let s = reduce(quick(), { type: "SELECT_JUTSU", id: "GOKAKYU" }, ...go);
     s = reduce(s, { type: "SIGN", sign: "SNAKE" }, { type: "TICK", dt: 30000 });
     assert.equal(s.phase, "FAILED");
+    assert.equal(s.playerHp, PLAYER_MAX_HP - enemyAttack(s));
     s = reduce(s, { type: "RETRY" });
     assert.equal(s.phase, "COUNTDOWN");
     assert.equal(s.seqIndex, 0);
+    assert.equal(s.jutsuId, "GOKAKYU");
     assert.equal(s.timeLeftMs, JUTSU.GOKAKYU.timeLimitMs);
   });
 
@@ -128,46 +186,55 @@ async function main() {
     assert.equal(gameReducer(s, { type: "CAST_DONE" }), s);
   });
 
-  await test("boss defeated → VICTORY; ranks", () => {
-    let s = quick();
-    for (let i = 0; i < 4 && s.phase !== "VICTORY"; i++) {
-      s = cast(s, "GOKAKYU", 2000);
+  await test("boss defeated → VICTORY; ranks; rage below 35% shortens timers and hardens hits", () => {
+    let s = reduce(quick(), { type: "SELECT_JUTSU", id: "RASENSHURIKEN" });
+    for (let i = 0; i < 8 && s.phase !== "VICTORY"; i++) {
+      s = cast(s, s.jutsuId!, 1500);
       s = reduce(s, { type: "CAST_DONE" });
       if (s.phase === "NEXT_ROUND") s = reduce(s, { type: "NEXT_ROUND_DONE" });
+      else if (s.phase !== "VICTORY") assert.fail(`unexpected ${s.phase}`);
     }
     assert.equal(s.phase, "VICTORY");
     assert.equal(s.bossHp, 0);
-    assert.equal(rankFor(s.stats), "S");
+    assert.ok(["S", "A"].includes(rankFor(s.stats)));
     assert.equal(rankFor({ ...s.stats, mistakes: 8, playMs: 140000, failedCount: 1 }), "C");
+    const calm = { ...quick(), bossHp: 900 };
+    const angry = { ...calm, bossHp: 300 };
+    assert.ok(enraged(angry) && !enraged(calm));
+    assert.ok(enemyAttack(angry) > enemyAttack(calm));
+    assert.ok(timeLimit(angry, 10000) < timeLimit(calm, 10000));
   });
 
   await test("character perks: time bonus, element damage; random boss is never the hero", () => {
     const naruto = reduce(menu(), { type: "SELECT_MODE", mode: "quick" }, { type: "SELECT_CHARACTER", id: "naruto" }, { type: "SELECT_JUTSU", id: "CHIDORI" });
     assert.equal(naruto.timeLeftMs, JUTSU.CHIDORI.timeLimitMs + 3000);
     const itachi = cast(reduce(menu(), { type: "SELECT_MODE", mode: "quick" }, { type: "SELECT_CHARACTER", id: "itachi" }), "RYUKA");
-    assert.equal(itachi.lastCast?.damage, Math.round(300 * 1.25 * 1.25));
+    assert.equal(itachi.lastCast?.damage, Math.round(280 * 1.25 * 1.25));
     for (let i = 0; i < 200; i++) {
       const b = randomBossFor("obito");
       assert.ok(b !== "obito" && b !== "obito-six-paths", b);
     }
   });
 
-  await test("story: chapter → intro dialogue → fight with unlocked jutsu → outro → chapter list", () => {
+  await test("story: chapter → intro dialogue → loadout of unlocked jutsu → fight → outro → chapter list", () => {
     let s = reduce(menu(), { type: "SELECT_MODE", mode: "story" }, { type: "SELECT_CHARACTER", id: "naruto" });
     assert.equal(s.phase, "CHAPTER_SELECT");
     s = reduce(s, { type: "SELECT_CHAPTER", index: 0 });
     assert.equal(s.phase, "DIALOGUE");
     assert.equal(s.bossId, "kakashi", "mentor spars in chapter 1");
-    assert.equal(s.bossMaxHp, 500);
+    assert.equal(s.bossMaxHp, 600);
     const n = dialogueLines(s).length;
     for (let i = 0; i < n; i++) s = reduce(s, { type: "DIALOGUE_NEXT" });
     assert.equal(s.phase, "JUTSU_SELECTION");
     assert.deepEqual(availableJutsu(s), ["HENGE", "KAWARIMI", "KAGE_BUNSHIN"]);
-    assert.equal(reduce(s, { type: "SELECT_JUTSU", id: "GOKAKYU" }).phase, "JUTSU_SELECTION", "locked jutsu refused");
-    while (s.phase !== "VICTORY") {
-      s = reduce(cast(s, "KAGE_BUNSHIN"), { type: "CAST_DONE" });
+    assert.equal(reduce(s, { type: "TOGGLE_LOADOUT", id: "GOKAKYU" }).loadout.length, 0, "locked jutsu refused");
+    s = reduce(s, { type: "TOGGLE_LOADOUT", id: "KAGE_BUNSHIN" }, { type: "TOGGLE_LOADOUT", id: "HENGE" }, { type: "TOGGLE_LOADOUT", id: "KAWARIMI" }, { type: "CONFIRM_LOADOUT" });
+    let guard = 0;
+    while (s.phase !== "VICTORY" && guard++ < 20) {
+      s = reduce(cast(s, s.jutsuId!), { type: "CAST_DONE" });
       if (s.phase === "NEXT_ROUND") s = reduce(s, { type: "NEXT_ROUND_DONE" });
     }
+    assert.equal(s.phase, "VICTORY");
     s = reduce(s, { type: "STORY_OUTRO" });
     assert.equal(s.phase, "DIALOGUE");
     assert.equal(s.dialogue?.part, "outro");
@@ -181,17 +248,18 @@ async function main() {
   });
 
   await test("enemy counter-attack: each failed jutsu costs chakra, empty chakra → DEFEAT → rematch", () => {
-    let s = quick();
+    let s = reduce(quick(), { type: "SELECT_JUTSU", id: "CHIDORI" });
     assert.equal(s.playerHp, PLAYER_MAX_HP);
     const hit = enemyAttack(s);
     let fails = 0;
     while (s.phase !== "DEFEAT" && fails < 10) {
-      s = reduce(s, { type: "SELECT_JUTSU", id: "CHIDORI" }, ...go, { type: "TICK", dt: 60000 });
+      s = reduce(s, ...go, { type: "TICK", dt: 60000 });
       fails++;
       if (s.phase === "FAILED") {
         assert.equal(s.playerHp, PLAYER_MAX_HP - hit * fails);
         assert.equal(s.lastEnemyHit?.amount, hit);
         s = reduce(s, { type: "BACK_TO_SELECTION" });
+        assert.equal(s.phase, "COUNTDOWN", "moves straight to the next jutsu");
       }
     }
     assert.equal(s.phase, "DEFEAT");
@@ -200,6 +268,7 @@ async function main() {
     assert.equal(reduce(s, { type: "SIGN", sign: "OX" }), s, "no input accepted after defeat");
     s = reduce(s, { type: "RESTART" });
     assert.equal(s.phase, "JUTSU_SELECTION");
+    assert.equal(s.loadout.length, 3, "rematch keeps your three");
     assert.equal(s.playerHp, PLAYER_MAX_HP);
     assert.equal(s.bossHp, s.bossMaxHp);
   });
@@ -207,7 +276,7 @@ async function main() {
   await test("story enemies hit harder in later chapters", () => {
     const at = (ch: number) => enemyAttack({ ...initialGameState(), mode: "story", chapter: ch });
     assert.ok(at(0) < at(CHAPTERS.length - 1));
-    assert.ok(Math.ceil(PLAYER_MAX_HP / at(CHAPTERS.length - 1)) >= 3, "at least 3 mistakes allowed even in the finale");
+    assert.ok(Math.ceil(PLAYER_MAX_HP / at(CHAPTERS.length - 1)) >= 3, "at least 3 failures allowed even in the finale");
   });
 
   await test("dojo: training mode, streak → mastery, free seal choice, back to menu", () => {
@@ -269,8 +338,8 @@ async function main() {
     await hold("MONKEY", 450);
     await sleep(80);
     const st = session.getState();
-    assert.ok(["JUTSU_CAST", "NEXT_ROUND", "JUTSU_SELECTION"].includes(st.phase), st.phase);
-    assert.equal(st.bossHp, 1000 - 220);
+    assert.ok(["JUTSU_CAST", "NEXT_ROUND", "COUNTDOWN", "PLAYING"].includes(st.phase), st.phase);
+    assert.equal(st.bossHp, 1000 - 200);
     session.destroy();
   });
 

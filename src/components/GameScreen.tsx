@@ -31,6 +31,9 @@ import { JutsuSelect } from "./JutsuSelect";
 import { JutsuSequence } from "./JutsuSequence";
 import { DefeatPanel, FailedPanel, ResultScreen } from "./ResultScreen";
 import { Dojo } from "./Dojo";
+import { LoadoutTray } from "./LoadoutTray";
+import { tagText } from "@/lib/game/effects";
+import { enraged } from "@/lib/game/gameState";
 import { askSensei, tauntRequest } from "@/lib/ai/sensei";
 
 const LS_MUTE = "shinobi.muted";
@@ -78,6 +81,9 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
   const [taunt, setTaunt] = useState<string | null>(null);
   const [musicOn, setMusicOn] = useState(true);
   const [enemyHit, setEnemyHit] = useState<{ amount: number; key: number } | null>(null);
+  const [mistakePop, setMistakePop] = useState<{ text: string; key: number } | null>(null);
+  const [reply, setReply] = useState<string | null>(null);
+  const [vs, setVs] = useState<number | null>(null);
 
   // --- setup ------------------------------------------------------------------
   useEffect(() => {
@@ -197,6 +203,23 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
       });
     }
 
+    // A wrong seal backfires: show what it cost.
+    if (g.lastMistakeCost && g.lastMistakeCost.id !== p.lastMistakeCost?.id) {
+      setMistakePop({ text: t("mistakeCost", { hp: g.lastMistakeCost.hp, s: (g.lastMistakeCost.ms / 1000).toFixed(1) }), key: g.lastMistakeCost.id });
+    }
+
+    // End of round: burn / summon ticks land on the enemy; a shield flashes if it absorbed the counter.
+    if (g.lastRound && g.lastRound.id !== p.lastRound?.id) {
+      const b = center(bossRef.current, 0.45);
+      if (g.lastRound.burn) fx.current?.burst(b.x, b.y, { colors: ["#ff5e1a", "#ffd166", "#e63946"], count: 90, speed: 9, size: 6, life: 50, gravity: -0.08 });
+      if (g.lastRound.summon) setTimeout(() => fx.current?.burst(b.x, b.y, { colors: ["#c77dff", "#f1d9ff", "#ffffff"], count: 90, speed: 11, size: 6, life: 50 }), 350);
+      if (g.lastRound.blocked) {
+        const c = center(panelRef.current, 0.45);
+        fx.current?.ring(c.x, c.y, "#7fe3ff", { speed: 10, width: 12, life: 36 });
+      }
+      if (g.lastRound.burn || g.lastRound.summon) setHitKey((k) => k + 1);
+    }
+
     if (g.stats.mistakes > p.stats.mistakes) {
       const c = center(panelRef.current, 0.42);
       fx.current?.mistake(c.x, c.y);
@@ -204,9 +227,11 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
     }
 
     // Enemy taunt when HP first drops below half (story mode).
-    // Villain taunt when HP first drops below half: written live by the AI, with a scripted fallback.
+    // Villain taunt when HP first drops below half (AI-written, scripted fallback) — and the hero answers.
     if (g.mode !== "training" && p.bossHp > p.bossMaxHp / 2 && g.bossHp <= g.bossMaxHp / 2 && g.bossHp > 0) {
-      const fallback = g.mode === "story" && g.chapter != null ? tr(CHAPTERS[g.chapter].taunt) : null;
+      const ch = g.mode === "story" && g.chapter != null ? CHAPTERS[g.chapter] : null;
+      const fallback = ch ? tr(ch.taunt) : null;
+      const answer = ch ? tr(ch.reply) : null;
       const started = Date.now();
       void askSensei(tauntRequest(g, "lowhp"), 5000).then((ai) => {
         const line = ai ?? fallback;
@@ -214,7 +239,17 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
         const wait = Math.max(0, 900 - (Date.now() - started));
         setTimeout(() => setTaunt(line), wait);
         setTimeout(() => setTaunt(null), wait + 4500);
+        if (answer) {
+          setTimeout(() => setReply(answer), wait + 2300);
+          setTimeout(() => setReply(null), wait + 6000);
+        }
       });
+    }
+
+    // VS splash when the fight begins.
+    if (g.phase === "COUNTDOWN" && p.phase === "JUTSU_SELECTION" && g.round === 1) {
+      setVs(Date.now());
+      setTimeout(() => setVs(null), 1900);
     }
 
     if (g.phase === p.phase) return;
@@ -249,6 +284,7 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
     }
     if (g.phase === "DEFEAT") setTimeout(() => setShowResult(true), 1500);
     if (["JUTSU_SELECTION", "IDLE", "DIALOGUE", "CHAPTER_SELECT", "MODE_SELECT", "TRAINING", "COUNTDOWN"].includes(g.phase)) {
+      if (g.phase !== "COUNTDOWN") setReply(null);
       setShowResult(false);
       setDamage(null);
       if (g.phase !== "JUTSU_SELECTION") setTaunt(null);
@@ -268,7 +304,7 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
   const location = locationFor(g);
 
   return (
-    <div ref={rootRef} className="game" style={j ? { ["--el" as string]: j.color, ["--el-glow" as string]: j.glow } : undefined}>
+    <div ref={rootRef} className={`game ${enraged(g) && ["COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND"].includes(g.phase) ? "enraged" : ""}`} style={j ? { ["--el" as string]: j.color, ["--el-glow" as string]: j.glow } : undefined}>
       <div className="game-bg">
         <ArenaBackdrop location={location} showName={false} />
       </div>
@@ -291,6 +327,17 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
           {enemyHit && (
             <div className="enemy-hit" key={enemyHit.key}>
               −{enemyHit.amount}
+            </div>
+          )}
+          {mistakePop && (
+            <div className="mistake-pop" key={mistakePop.key}>
+              {mistakePop.text}
+            </div>
+          )}
+          {reply && hero && (
+            <div className="hero-reply" key={reply}>
+              <Portrait ch={hero} className="hr-img" />
+              <p>{reply}</p>
             </div>
           )}
           {comboPop && (
@@ -329,6 +376,7 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
       </div>
 
       <footer className="game-bottom">
+        <LoadoutTray />
         <JutsuSequence />
       </footer>
 
@@ -343,6 +391,13 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
           {hero && <Portrait ch={hero} className="cb-hero" />}
           <div className="cb-kanji">{j.kanji}</div>
           <div className="cb-title">{g.phase === "SUCCESS" ? t("jutsuCast") : tr(j.name).toUpperCase()}</div>
+          {g.phase === "JUTSU_CAST" && g.lastCast && g.lastCast.tags.length > 0 && (
+            <div className="cb-tags">
+              {g.lastCast.tags.map((tg) => tagText(tg)).filter(Boolean).map((x) => (
+                <span key={x}>{x}</span>
+              ))}
+            </div>
+          )}
           {g.phase === "JUTSU_CAST" && g.lastCast?.perfect && <div className="cb-perfect">{t("perfectJutsu", { n: g.lastCast.perfectBonus })}</div>}
           {g.phase === "JUTSU_CAST" && g.lastCast && g.lastCast.speedBonus > 0 && <div className="cb-bonus">{t("speedBonus", { n: g.lastCast.speedBonus })}</div>}
         </div>
@@ -350,6 +405,28 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
       {g.phase === "NEXT_ROUND" && (
         <div className="round-banner" key={g.round}>
           {t("round")} {g.round + 1}
+          {g.lastRound && (
+            <div className="round-report">
+              {g.lastRound.burn > 0 && <span className="rr-burn">{t("repBurn", { n: g.lastRound.burn })}</span>}
+              {g.lastRound.summon > 0 && <span className="rr-summon">{t("repSummon", { n: g.lastRound.summon })}</span>}
+              {g.lastRound.staggered && <span className="rr-good">{t("repStagger")}</span>}
+              {g.lastRound.blocked && <span className="rr-good">{t("repBlocked")}</span>}
+              {g.lastRound.retaliation > 0 && <span className="rr-bad">{t("repRetaliate", { foe: g.bossId ? tr(CHARACTERS[g.bossId].name) : "?", n: g.lastRound.retaliation })}</span>}
+            </div>
+          )}
+        </div>
+      )}
+      {vs && hero && g.bossId && (
+        <div className="vs-splash" key={vs} aria-hidden>
+          <div className="vss-side left">
+            <Portrait ch={hero} className="vss-img" />
+            <b>{tr(hero.name).toUpperCase()}</b>
+          </div>
+          <div className="vss-vs">VS</div>
+          <div className="vss-side right">
+            <Portrait ch={CHARACTERS[g.bossId]} className="vss-img" />
+            <b>{tr(CHARACTERS[g.bossId].name).toUpperCase()}</b>
+          </div>
         </div>
       )}
       {g.phase === "VICTORY" && showResult && <ResultScreen onExit={quit} />}

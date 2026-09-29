@@ -21,8 +21,43 @@ export type Phase =
   | "TRAINING"
   | "VICTORY";
 
-export type Element = "fire" | "water" | "lightning" | "chakra";
-export type JutsuId = "HENGE" | "KAWARIMI" | "KAGE_BUNSHIN" | "GOKAKYU" | "CHIDORI" | "RYUKA" | "SUIRYUDAN" | "HOSENKA" | "KUCHIYOSE";
+export type Element = "fire" | "water" | "lightning" | "chakra" | "wind";
+export type JutsuId = "HENGE" | "KAWARIMI" | "KAGE_BUNSHIN" | "GOKAKYU" | "CHIDORI" | "RYUKA" | "SUIRYUDAN" | "HOSENKA" | "KUCHIYOSE" | "RASENGAN" | "KIRIN" | "RASENSHURIKEN";
+
+/** What a jutsu does besides its damage — the reason to pick it for your three. */
+export type JutsuEffect =
+  | { kind: "shield"; hits: number }
+  | { kind: "boost"; mult: number }
+  | { kind: "burn"; dmg: number; turns: number }
+  | { kind: "heal"; hp: number }
+  | { kind: "pierce"; perfectMult: number }
+  | { kind: "combo"; perCombo: number }
+  | { kind: "summon"; dmg: number; turns: number; hits: number }
+  | { kind: "execute"; belowPct: number; mult: number }
+  | { kind: "recoil"; hp: number }
+  | { kind: "none" };
+
+/** Buffs/debuffs active in the current fight. */
+export interface Status {
+  /** Enemy strikes that will be blocked. */
+  shield: number;
+  /** Damage multiplier for the NEXT jutsu (1 = none). */
+  boost: number;
+  burn: { dmg: number; turns: number } | null;
+  summon: { dmg: number; turns: number } | null;
+}
+
+/** What happened at the end of a round (for the round banner). */
+export interface RoundReport {
+  burn: number;
+  summon: number;
+  /** Enemy retaliation damage actually taken (0 if blocked or staggered). */
+  retaliation: number;
+  blocked: boolean;
+  staggered: boolean;
+  healed: number;
+  id: number;
+}
 export type GameMode = "story" | "quick" | "training";
 
 export interface Jutsu {
@@ -38,6 +73,7 @@ export interface Jutsu {
   difficulty: 1 | 2 | 3;
   color: string;
   glow: string;
+  effect: JutsuEffect;
   /** e.g. "abridged: first 6 of 44 seals" */
   note?: L;
 }
@@ -64,6 +100,8 @@ export interface CastResult {
   perfect: boolean;
   speedBonus: number;
   perfectBonus: number;
+  /** Short labels for what the effect did, e.g. "shield", "crit". */
+  tags: string[];
 }
 
 export interface GameState {
@@ -82,6 +120,13 @@ export interface GameState {
   playerMaxHp: number;
   /** Damage of the last enemy counter-attack (for the UI). */
   lastEnemyHit: { amount: number; id: number } | null;
+  /** The three jutsu chosen for this fight, and which one is up. */
+  loadout: JutsuId[];
+  slot: number;
+  status: Status;
+  lastRound: RoundReport | null;
+  /** Chakra lost to the last wrong seal (for the UI). */
+  lastMistakeCost: { hp: number; ms: number; id: number } | null;
   /** Dojo (training mode): current target seal, streak and mastered seals. */
   training: { sign: SignId; streak: number; mastered: SignId[]; hits: number } | null;
   jutsuId: JutsuId | null;
@@ -111,6 +156,9 @@ export type GameAction =
   | { type: "SELECT_CHARACTER"; id: CharacterId; bossId?: CharacterId }
   | { type: "CHANGE_CHARACTER" }
   | { type: "SELECT_JUTSU"; id: JutsuId }
+  | { type: "TOGGLE_LOADOUT"; id: JutsuId }
+  | { type: "CONFIRM_LOADOUT" }
+  | { type: "SELECT_SLOT"; slot: number }
   | { type: "COUNTDOWN_TICK" }
   | { type: "TICK"; dt: number }
   | { type: "SIGN"; sign: SignId }

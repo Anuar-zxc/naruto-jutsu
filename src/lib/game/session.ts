@@ -72,7 +72,7 @@ export const TIMING = {
   successCharge: 950,
   castImpact: 650,
   castDuration: 2400,
-  nextRound: 1300,
+  nextRound: 2300,
   /** Extra time a wrong seal must be held (after recognition) before it counts as a mistake. */
   wrongHold: 350,
   /** How long a counted mistake stays on screen. */
@@ -237,6 +237,17 @@ export class GameSession {
           if (this.state.phase === "TRAINING") this.dispatch({ type: "TRAIN_SELECT", sign: nextSign });
         });
       } else this.sfx.confirm(tr0.streak - 1);
+    }
+    if (a.type === "SELECT_SLOT") {
+      this.sfx.select();
+      this.recognizer?.reset();
+      this.stabilizer.reset();
+      this.wrong = null;
+      this.lastProgressAt = performance.now();
+    }
+    if (a.type === "CAST_DONE" && next.lastRound) {
+      if (next.lastRound.retaliation > 0) setTimeout(() => this.sfx.enemyStrike(), 250);
+      if (next.lastRound.burn || next.lastRound.summon) this.sfx.hit();
     }
     if (a.type === "TRAIN_SELECT") {
       this.recognizer?.reset();

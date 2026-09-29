@@ -7,7 +7,7 @@
  * a hand shape per hand + how the hands relate (distance, height, direction).
  * Where possible the approximation keeps the look of the real seal:
  *   Tiger — index+middle up on both hands      Dog  — open palm resting ON a fist
- *   Horse — index fingers up, touching         Boar — both palms pointing down
+ *   Horse — index fingers up, touching         Boar — "tusks" (index+pinky) over a fist
  *   Snake — two clasped fists                  Rat  — two fingers wrapped by a fist
  * Every pair of seals differs in at least one clearly visible feature.
  */
@@ -132,10 +132,46 @@ export const SIGNS: Record<SignId, SignDefinition> = {
     id: "BOAR",
     kanji: "亥",
     name: { en: "Boar", ru: "Кабан" },
-    howTo: { en: "Both palms open, one held ABOVE the other", ru: "Обе ладони раскрыты, одна НАД другой" },
-    shapes: ["OPEN", "OPEN"],
-    stack: "stacked",
+    howTo: { en: "Boar tusks: index + pinky up on one hand, the other hand a fist", ru: "Клыки кабана: на одной руке указательный и мизинец вверх, другая — кулак" },
+    shapes: ["HORNS", "FIST"],
+  },
+
+  // --- Special seals (not part of the zodiac): used by advanced jutsu --------
+  CONFRONT: {
+    ...base,
+    id: "CONFRONT",
+    kanji: "対",
+    name: { en: "Confrontation", ru: "Противостояние" },
+    howTo: { en: "One open palm, the other hand index + middle up", ru: "Одна ладонь раскрыта, на другой — указательный и средний вверх" },
+    shapes: ["OPEN", "PEACE"],
+  },
+  WIND: {
+    ...base,
+    id: "WIND",
+    kanji: "風",
+    name: { en: "Wind", ru: "Ветер" },
+    howTo: { en: "One open palm, the other hand index + pinky up", ru: "Одна ладонь раскрыта, на другой — указательный и мизинец вверх" },
+    shapes: ["OPEN", "HORNS"],
+  },
+  SPIRIT: {
+    ...base,
+    id: "SPIRIT",
+    kanji: "霊",
+    name: { en: "Spirit", ru: "Дух" },
+    howTo: { en: "One index finger up, the other hand index + pinky up", ru: "На одной руке указательный вверх, на другой — указательный и мизинец" },
+    shapes: ["INDEX", "HORNS"],
+  },
+  FOX: {
+    ...base,
+    id: "FOX",
+    kanji: "狐",
+    name: { en: "Fox", ru: "Лис" },
+    howTo: { en: "One hand index + middle up, the other index + pinky up", ru: "На одной руке указательный и средний, на другой — указательный и мизинец" },
+    shapes: ["PEACE", "HORNS"],
   },
 };
+
+/** The twelve zodiac seals (the classic set). */
+export const ZODIAC: SignId[] = ["RAT", "OX", "TIGER", "RABBIT", "DRAGON", "SNAKE", "HORSE", "RAM", "MONKEY", "BIRD", "DOG", "BOAR"];
 
 export const SIGN_LIST: SignDefinition[] = Object.values(SIGNS);

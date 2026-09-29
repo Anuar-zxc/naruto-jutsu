@@ -72,6 +72,8 @@ class Procedural {
   private phraseB: number[] = [];
   private style: Style = STYLES.menu;
   private noise: AudioBuffer;
+  /** Per-track bus: fading it cuts even the notes already scheduled / still ringing. */
+  private bus: GainNode | null = null;
 
   constructor(
     private ctx: AudioContext,
@@ -85,6 +87,9 @@ class Procedural {
 
   start(id: TrackId) {
     this.stop();
+    this.bus = this.ctx.createGain();
+    this.bus.gain.value = 1;
+    this.bus.connect(this.out);
     this.style = STYLES[id];
     this.phraseA = composePhrase(id, this.style.density);
     this.phraseB = composePhrase(`${id}b` as TrackId, this.style.density);
@@ -96,6 +101,15 @@ class Procedural {
   stop() {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    const bus = this.bus;
+    this.bus = null;
+    if (bus) {
+      const t = this.ctx.currentTime;
+      bus.gain.cancelScheduledValues(t);
+      bus.gain.setValueAtTime(bus.gain.value, t);
+      bus.gain.linearRampToValueAtTime(0, t + 0.35);
+      setTimeout(() => bus.disconnect(), 500);
+    }
   }
 
   private schedule() {
@@ -126,7 +140,7 @@ class Procedural {
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(peak, t + attack);
     g.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
-    g.connect(this.out);
+    g.connect(this.bus ?? this.out);
     return g;
   }
 
@@ -217,10 +231,17 @@ export class MusicPlayer {
   private ctx: AudioContext | null = null;
   private out: GainNode | null = null;
   private proc: Procedural | null = null;
+  /** The ONE element allowed to be audible. */
   private audio: HTMLAudioElement | null = null;
+  /** Every element we ever started, so none can be left playing. */
+  private live = new Set<HTMLAudioElement>();
+  private fades = new Map<HTMLAudioElement, ReturnType<typeof setInterval>>();
   private current: TrackId | null = null;
+  /** Wanted track (may be set before audio is unlocked). */
+  private wanted: TrackId | null = null;
+  /** Bumped on every play/stop so stale async work can bail out. */
+  private token = 0;
   private available = new Map<TrackId, boolean>();
-  private fadeTimer: ReturnType<typeof setInterval> | null = null;
   enabled = true;
 
   unlock() {
@@ -235,12 +256,14 @@ export class MusicPlayer {
       this.proc = new Procedural(this.ctx, this.out);
     }
     if (this.ctx.state === "suspended") void this.ctx.resume();
+    // A track requested before the first click starts now.
+    if (this.wanted && this.current !== this.wanted) void this.play(this.wanted);
   }
 
   setEnabled(on: boolean) {
     this.enabled = on;
     if (this.out && this.ctx) this.out.gain.setTargetAtTime(on ? MUSIC_VOL * 0.8 : 0, this.ctx.currentTime, 0.2);
-    if (this.audio) this.audio.volume = on ? MUSIC_VOL : 0;
+    if (this.audio) this.fade(this.audio, on ? MUSIC_VOL : 0);
   }
 
   private async hasFile(id: TrackId): Promise<boolean> {
@@ -256,53 +279,64 @@ export class MusicPlayer {
     return ok;
   }
 
-  /** Switch to a scene's track (no-op if already playing). */
+  /** Switch to a scene's track (no-op if already playing). Never plays two tracks at once. */
   async play(id: TrackId) {
-    if (id === this.current) return;
+    this.wanted = id;
+    if (id === this.current || !this.ctx) return;
+    const my = ++this.token;
     this.current = id;
-    if (!this.ctx) return;
     const file = await this.hasFile(id);
-    if (this.current !== id) return; // superseded while checking
-    this.fadeOutAudio();
-    this.proc?.stop();
+    if (my !== this.token) return; // superseded while checking
+    this.silenceAll();
     if (file) {
       const a = new Audio(FILE(id));
       a.loop = id !== "victory";
       a.volume = 0;
       this.audio = a;
+      this.live.add(a);
       void a.play().catch(() => undefined);
-      this.fadeTo(a, this.enabled ? MUSIC_VOL : 0);
+      this.fade(a, this.enabled ? MUSIC_VOL : 0);
     } else {
       this.proc?.start(id);
     }
   }
 
   stop() {
+    this.token++;
+    this.wanted = null;
     this.current = null;
+    this.silenceAll();
+  }
+
+  /** Fade out and release every streamed track and the generated score. */
+  private silenceAll() {
     this.proc?.stop();
-    this.fadeOutAudio();
-  }
-
-  private fadeTo(a: HTMLAudioElement, target: number) {
-    if (this.fadeTimer) clearInterval(this.fadeTimer);
-    this.fadeTimer = setInterval(() => {
-      const v = a.volume + (target - a.volume) * 0.15;
-      a.volume = Math.max(0, Math.min(1, Math.abs(target - v) < 0.01 ? target : v));
-      if (a.volume === target && this.fadeTimer) clearInterval(this.fadeTimer);
-    }, 50);
-  }
-
-  private fadeOutAudio() {
-    const old = this.audio;
-    if (!old) return;
+    for (const a of this.live) {
+      this.fade(a, 0, () => {
+        a.pause();
+        a.removeAttribute("src");
+        a.load();
+        this.live.delete(a);
+      });
+    }
     this.audio = null;
+  }
+
+  /** One fade per element: a new fade cancels the previous one (no tug-of-war). */
+  private fade(a: HTMLAudioElement, target: number, done?: () => void) {
+    const prev = this.fades.get(a);
+    if (prev) clearInterval(prev);
+    const step = target === 0 ? 0.08 : 0.15;
     const id = setInterval(() => {
-      old.volume = Math.max(0, old.volume - 0.06);
-      if (old.volume <= 0) {
+      const v = target === 0 ? a.volume - step : a.volume + (target - a.volume) * step;
+      a.volume = Math.max(0, Math.min(1, Math.abs(target - v) < 0.01 || (target === 0 && v <= 0) ? target : v));
+      if (a.volume === target) {
         clearInterval(id);
-        old.pause();
+        this.fades.delete(a);
+        done?.();
       }
-    }, 50);
+    }, 40);
+    this.fades.set(a, id);
   }
 }
 

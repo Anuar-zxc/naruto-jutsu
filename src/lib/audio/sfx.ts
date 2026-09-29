@@ -173,7 +173,7 @@ export class Sfx {
   }
 
   attack(el: Element) {
-    const clipFor: Partial<Record<Element, ClipId>> = { fire: "fire", lightning: "lightning", chakra: "rasengan" };
+    const clipFor: Partial<Record<Element, ClipId>> = { fire: "fire", lightning: "lightning", chakra: "rasengan", wind: "rasengan" };
     const id = clipFor[el];
     if (id && this.clip(id, { gain: 1, maxDur: 3.4 })) return;
     if (el === "fire") {
@@ -182,6 +182,10 @@ export class Sfx {
     } else if (el === "water") {
       this.noise(1.1, { type: "bandpass", freq: 600, to: 1800, q: 2, gain: 0.45, attack: 0.15 });
       this.tone(220, 0.9, { type: "sine", gain: 0.12, to: 110 });
+    } else if (el === "wind") {
+      this.noise(1.4, { type: "bandpass", freq: 400, to: 5000, q: 6, gain: 0.5, attack: 0.3 });
+      this.noise(1.2, { type: "highpass", freq: 3000, to: 8000, gain: 0.25, attack: 0.2, delay: 0.2 });
+      this.tone(160, 1.2, { type: "sawtooth", gain: 0.1, to: 900, attack: 0.4 });
     } else if (el === "chakra") {
       [392, 523, 784, 1047].forEach((f, i) => this.tone(f, 0.5, { type: "sine", gain: 0.12, delay: i * 0.05 }));
       this.noise(0.8, { type: "bandpass", freq: 1200, to: 4000, q: 3, gain: 0.3, attack: 0.1 });

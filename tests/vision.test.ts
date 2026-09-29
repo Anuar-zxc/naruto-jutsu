@@ -54,8 +54,8 @@ test("pointing angle: 0 = up, + = toward screen right, ±180 = down", () => {
 
 // --- Classification --------------------------------------------------------
 
-test("all 12 zodiac seals are recognised under size / distance / tilt / noise variation", () => {
-  assert.equal(SIGN_LIST.length, 12);
+test("all 16 seals (12 zodiac + 4 special) are recognised under size / distance / tilt / noise variation", () => {
+  assert.equal(SIGN_LIST.length, 16);
   const rec = new GestureRecognizer();
   let seed = 3;
   for (const def of SIGN_LIST) {
@@ -205,12 +205,12 @@ test("OX shown stacked → 'Hold your hands side by side, at the same height.'",
   assert.equal(en("OX", "DOG"), "Hold your hands side by side, at the same height.");
 });
 
-test("BOAR = stacked palms: side-by-side palms (MONKEY) get 'Stack your palms'; stacked palms are not MONKEY", () => {
-  assert.match(en("BOAR", "MONKEY") ?? "", /^Stack your palms/);
-  assert.equal(correction("BOAR", "MONKEY")?.text.ru, "Сложи ладони ярусом: одна рука заметно ВЫШЕ другой.");
-  assert.equal(en("MONKEY", "BOAR"), "Hold your hands side by side, at the same height.");
+test("BOAR = tusks + fist: a fist next to an open palm is not a Boar; wrong hand shape gets a finger correction", () => {
   const rec = new GestureRecognizer();
-  assert.equal(rec.pickRaw(rec.classifyGesture(features("BOAR", { dy: -1.6 }))).sign, "BOAR", "either hand may be on top");
+  assert.equal(rec.pickRaw(rec.classifyGesture(features("BOAR"))).sign, "BOAR");
+  assert.notEqual(rec.pickRaw(rec.classifyGesture(features("OX"))).sign, "BOAR");
+  assert.ok(correction("BOAR", "RABBIT"), "Rabbit shown for Boar gets a correction");
+  assert.equal(en("MONKEY", "MONKEY", { dy: 1.6 }), "Hold your hands side by side, at the same height.");
 });
 
 test("HORSE with right hand tilted outward → rotate inward", () => {

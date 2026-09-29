@@ -35,7 +35,7 @@ Camera (getUserMedia, mirrored)
 
 The hot path runs **outside React**. Each camera frame goes tracker → recognizer → `GameSession` → canvas overlay. React only re-renders on game-state changes plus a live HUD capped at about 12 updates per second.
 
-## The 12 zodiac seals
+## 16 seals: the 12 zodiac seals + 4 special seals
 
 Real seals interlock the fingers of both hands. A webcam tracker can't see fingers hidden behind the other hand, so each seal is a **camera-readable approximation**: one hand shape per hand, plus how the hands relate to each other (distance, height, direction). Where possible it keeps the look of the real seal. Every pair of seals differs in at least one clearly visible feature. The pictograms in the game are generated from the same definitions the classifier uses.
 
@@ -52,32 +52,51 @@ Real seals interlock the fingers of both hands. A webcam tracker can't see finge
 | Monkey | 申 | both palms open, fingers up | OPEN + OPEN, up |
 | Bird | 酉 | open palm · other hand index up | OPEN + INDEX |
 | Dog | 戌 | open palm held **above** a fist | OPEN over FIST |
-| Boar | 亥 | both palms open, one held **above** the other | OPEN + OPEN, stacked |
+| Boar | 亥 | "tusks": index + pinky up · other hand a fist | HORNS + FIST |
+| *Confrontation* | 対 | open palm · other hand index + middle | OPEN + PEACE |
+| *Wind* | 風 | open palm · other hand index + pinky | OPEN + HORNS |
+| *Spirit* | 霊 | index up · other hand index + pinky | INDEX + HORNS |
+| *Fox* | 狐 | index + middle · other hand index + pinky | PEACE + HORNS |
 
-## Jutsu — real seal sequences
+The four special seals (italic) aren't zodiac seals; the game uses them for Rasengan, Kirin and Rasenshuriken.
 
-The sequences come from fan seal guides for the series (sources vary on some of them). The Water Dragon is 44 seals long in the series, so the game uses its first six.
+## Jutsu, effects and the three-jutsu loadout
 
-| Jutsu | Seals | Element |
-| --- | --- | --- |
-| Transformation (Henge) | Dog → Boar → Tiger | chakra |
-| Body Replacement (Kawarimi) | Tiger → Boar → Ox → Snake | chakra |
-| Shadow Clone (Kage Bunshin) | Ram → Snake → Tiger | chakra |
-| Fire Style: Great Fireball (Gōkakyū) | Snake → Ram → Monkey → Boar → Horse → Tiger | fire |
-| Chidori | Ox → Rabbit → Monkey | lightning |
-| Fire Style: Dragon Flame (Ryūka) | Snake → Dragon → Rabbit → Tiger | fire |
-| Water Style: Water Dragon (Suiryūdan), abridged | Ox → Monkey → Rabbit → Rat → Boar → Bird | water |
-| Fire Style: Phoenix Flower (Hōsenka) | Rat → Tiger → Dog → Ox → Rabbit → Tiger | fire |
-| Summoning (Kuchiyose) | Boar → Dog → Bird → Monkey → Ram | chakra |
+At the start of every fight you pick **three jutsu**. There is no selection screen between rounds: the rounds rotate through your three (1 → 2 → 3 → 1…). During the countdown you can switch with keys 1–3 or a click. Once you've made the first seal, you're committed to that jutsu.
 
-Damage and time scale with the number of seals: 3 seals give 220 damage in 13 s, 6 seals give 460 damage in 22 s.
+Every jutsu has an **effect** on top of its damage, so the choice of three matters:
+
+| Jutsu | Seals | Element | Effect |
+| --- | --- | --- | --- |
+| Transformation (Henge) | Dog → Boar → Tiger | chakra | shield: blocks 1 enemy hit |
+| Body Replacement (Kawarimi) | Tiger → Boar → Ox → Snake | chakra | shield: blocks 2 hits |
+| Shadow Clone (Kage Bunshin) | Ram → Snake → Tiger | chakra | next jutsu ×1.8 damage |
+| Great Fireball (Gōkakyū) | Snake → Ram → Monkey → Boar → Horse → Tiger | fire | burn: 70 per round for 3 rounds |
+| Chidori | Ox → Rabbit → Monkey | lightning | pierce: ×1.9 if cast with no mistakes |
+| Dragon Flame (Ryūka) | Snake → Dragon → Rabbit → Tiger | fire | burn: 90 per round for 2 rounds |
+| Water Dragon (Suiryūdan), abridged | Ox → Monkey → Rabbit → Rat → Boar → Bird | water | heal: +30 chakra |
+| Rasengan | Confrontation → Spirit → Fox | chakra | pure force: 330 damage for 3 seals |
+| Phoenix Flower (Hōsenka) | Rat → Tiger → Dog → Ox → Rabbit → Tiger | fire | barrage: +22 damage per combo point |
+| Summoning (Kuchiyose) | Boar → Dog → Bird → Monkey → Ram | chakra | summon: 90 per round for 3 rounds + blocks 1 hit |
+| Kirin | Dragon → Wind → Spirit → Ox → Tiger | lightning | execute: ×2.2 if the enemy is below 40% |
+| Rasenshuriken | Wind → Fox → Spirit → Confrontation → Wind | wind | 620 damage, but costs you 15 chakra |
+
+Zodiac sequences come from fan seal guides for the series (sources vary on some). The Water Dragon is 44 seals long in the series, so the game uses its first six. Time limit: 3 s + 2.5 s per seal, plus the hero's perk.
+
+### Harder fights: mistakes are expensive
+
+- **Wrong seal:** −6…12 chakra (grows through the story), −1.5 s on the timer, combo reset.
+- **Perfect jutsu** (no mistakes): the enemy is **staggered** and can't answer. Otherwise it **retaliates** at the end of the round (40% of its strike).
+- **Time out:** the enemy strikes at full power (22 → 42 through the story). Shields absorb strikes.
+- **Rage:** below 35% HP the enemy enrages: +35% damage, 15% less time for seals, a pulsing red screen.
+- **0 chakra → DEFEAT** (rematch keeps your three jutsu).
 
 ## Modes, story and characters
 
-- **Story:** 12 chapters across 9 locations and 11 villains: Kisame, Hidan, Itachi, Konan, Pain, Obito, Obito (Ten-Tails), Madara, Momoshiki, Kawaki and Isshiki. Chapter 1 is a sparring match with the mentor. Each chapter has visual-novel dialogue before and after the fight (typewriter text, active-speaker highlight; skip with Esc or the button). A villain taunts you when their HP drops below half. New jutsu unlock as you progress, and progress is saved in the browser.
+- **Story:** 13 chapters in 4 arcs (The Genin's Path, Shadow of the Akatsuki, The Fourth War, The Next Generation) with 12 opponents: the mentor, Kisame, rival Sasuke, Hidan, Itachi, Konan, Pain, Obito, Obito (Ten-Tails), Madara, Momoshiki, Kawaki and Isshiki. Each chapter has a visual-novel scene before and after the fight, a VS splash, and a mid-fight exchange: the villain taunts you at half HP and your hero answers. New jutsu unlock as you progress; progress is saved in the browser.
+- **23 battle backgrounds** (Chūnin Exam arena, Forest of Death, Hidden Rain and Sand villages, the war battlefield, Akatsuki hideout, Infinite Tsukuyomi and more), supplied by the project owner. Quick battle rotates through them.
 - **Quick battle:** every jutsu unlocked, against a random villain. Takes about 2 minutes, which makes it the best mode for a demo.
-- **Dojo (修行):** practise any of the 12 seals with no timer and no damage. Error Mode coaches you live; hold → release three times in a row to master a seal, then the dojo moves you to the next one. Mastery is saved in the browser.
-- **The enemy strikes back:** you have 100 chakra. When a jutsu times out, the villain counter-attacks (22 in chapter 1, up to 42 in the finale; 34 in quick battle). At 0 chakra you get **DEFEAT**, with a rematch, a return to the chapters or menu, and a tip to train in the dojo.
+- **Dojo (修行):** practise any of the 16 seals with no timer and no damage. Error Mode coaches you live; hold → release three times in a row to master a seal, then the dojo moves you to the next one. Mastery is saved in the browser.
 - **Personal records:** the best score for quick battle and for each story chapter is saved. The result screen shows **NEW RECORD!** or your previous best.
 - **24 playable characters**, each with a perk (extra time, or a damage bonus to an element or to everything). If you fight as a villain who is also the chapter boss, you face their "Shadow".
 - **Russian / English:** the whole UI switches with the RU / EN toggle, including every Error Mode correction ("Выпрями средние пальцы на обеих руках."). The language is detected automatically and remembered.
@@ -173,7 +192,7 @@ npm run dev        # http://localhost:3000
 Other commands:
 
 ```bash
-npm test           # 46 tests: features, all 12 seals, smoothing, every correction path, story + quick game flow, counter-attack/defeat, dojo
+npm test           # 52 tests: features, all 16 seals, smoothing, every correction path, loadout + effects, story + quick flow, defeat, dojo, AI sensei
 npm run typecheck
 npm run build && npm start
 ```

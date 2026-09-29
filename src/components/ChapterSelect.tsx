@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { useGame, useSession } from "@/hooks/useGame";
 import { useLang } from "@/hooks/useLang";
-import { CHAPTERS } from "@/lib/game/story";
+import { ARCS, CHAPTERS } from "@/lib/game/story";
 import { CHARACTERS, mentorFor } from "@/lib/game/characters";
 import { JUTSU } from "@/lib/game/jutsu";
 import { LOCATIONS } from "@/lib/game/locations";
@@ -30,8 +30,15 @@ export function ChapterSelect() {
         <span>{t("storyTitle")}</span>
         {t("chapters")}
       </div>
+      <div className="chapter-arcs">
+        {ARCS.map((arc, ai) => (
+          <section key={ai} className="chapter-arc">
+            <div className="arc-head">
+              <span className="arc-kanji">{arc.kanji}</span>
+              <span className="arc-title">{tr(arc.title)}</span>
+            </div>
       <div className="chapter-grid">
-        {CHAPTERS.map((ch, i) => {
+        {CHAPTERS.map((ch, i) => ch.arc !== ai ? null : (() => {
           const loc = LOCATIONS[ch.location];
           const enemyId = ch.enemy === "mentor" ? mentorFor(g.characterId) : ch.enemy;
           const enemy = CHARACTERS[enemyId];
@@ -62,7 +69,10 @@ export function ChapterSelect() {
               {cleared && <div className="chapter-badge">{t("cleared")}</div>}
             </button>
           );
-        })}
+        })())}
+      </div>
+          </section>
+        ))}
       </div>
       <div className="chapter-actions">
         <button className="btn ghost small" onClick={() => session.dispatch({ type: "CHANGE_CHARACTER" })}>

@@ -53,7 +53,7 @@ export function StartScreen({ onStart }: { onStart: () => void }) {
             <b>3</b> {t("step3")}
           </li>
         </ol>
-        <div className="gallery-title">{t("twelveSeals")}</div>
+        <div className="gallery-title">{t("twelveSeals")} <em className="gallery-plus">{t("specialSeals")}</em></div>
         <div className="seal-gallery">
           {SIGN_LIST.map((s) => (
             <div key={s.id} className="gallery-item" title={tr(s.howTo)}>

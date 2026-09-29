@@ -93,7 +93,12 @@ export type SignId =
   | "MONKEY"
   | "BIRD"
   | "DOG"
-  | "BOAR";
+  | "BOAR"
+  // Special (non-zodiac) seals
+  | "CONFRONT"
+  | "WIND"
+  | "SPIRIT"
+  | "FOX";
 
 /** Per-hand finger configuration. Values: 1 = extended, 0 = curled. */
 export type HandShapeId = "FIST" | "OPEN" | "INDEX" | "PEACE" | "HORNS";

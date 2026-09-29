@@ -46,6 +46,7 @@ const PALETTE: Record<Element, string[]> = {
   water: ["#e8fbff", "#9be7ff", "#4cc9f0", "#1f8bff", "#3a5bff"],
   lightning: ["#ffffff", "#e3f1ff", "#b8c8ff", "#b28cff", "#7b5cff"],
   chakra: ["#ffffff", "#c9f4ff", "#7fe3ff", "#2ec5ff", "#1b6fff"],
+  wind: ["#ffffff", "#e2fff4", "#9dffd9", "#5dffc1", "#1fd39a"],
 };
 
 const pick = <T,>(a: T[]) => a[(Math.random() * a.length) | 0];
@@ -155,9 +156,12 @@ export class FxEngine {
 
   private impact(el: Element, x: number, y: number) {
     const c = PALETTE[el];
-    this.burst(x, y, { colors: c, count: 140, speed: 13, size: 6, life: 60, gravity: el === "water" ? 0.25 : 0.04 });
-    this.ring(x, y, c[1], { speed: 14, width: 8, life: 30 });
-    this.ring(x, y, c[3], { speed: 9, width: 4, life: 40 });
+    // Brighter, heavier impacts: core flash, two shock rings and a wide debris cone.
+    this.burst(x, y, { colors: c, count: 200, speed: 15, size: 7, life: 65, gravity: el === "water" ? 0.25 : 0.04 });
+    this.burst(x, y, { colors: ["#ffffff", c[1]], count: 60, speed: 6, size: 12, life: 22 });
+    this.ring(x, y, c[1], { speed: 16, width: 10, life: 32 });
+    this.ring(x, y, c[3], { speed: 10, width: 5, life: 44 });
+    this.ring(x, y, "#ffffff", { speed: 24, width: 3, life: 18 });
   }
 
   private frame = (now: number) => {
@@ -272,7 +276,25 @@ export class FxEngine {
       y -= Math.sin(Math.PI * k) * 80; // fire arcs upward
     }
 
-    const size = p.el === "fire" ? 26 + 10 * Math.sin(now / 50) : 18;
+    if (p.el === "wind") {
+      // Rasenshuriken: a spinning four-bladed disc of wind.
+      const R = 46;
+      const rot = now / 40;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.globalCompositeOperation = "lighter";
+      for (let b = 0; b < 4; b++) {
+        ctx.rotate(Math.PI / 2);
+        ctx.fillStyle = "rgba(157,255,217,0.55)";
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(R * 0.7, -R * 0.2 + Math.sin(rot) * 4, R * 1.6, 0);
+        ctx.quadraticCurveTo(R * 0.7, R * 0.35, 0, 0);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+    const size = p.el === "fire" ? 26 + 10 * Math.sin(now / 50) : p.el === "wind" ? 22 : 18;
     const g = ctx.createRadialGradient(x, y, 0, x, y, size * 2.2);
     g.addColorStop(0, c[0]);
     g.addColorStop(0.35, c[2]);

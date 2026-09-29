@@ -6,15 +6,16 @@
  * webcam, e.g. in CI or headless browsers. It is never enabled by default and
  * the UI clearly labels it. The real game always uses the camera.
  *
- * Keys: 1 2 3 4 5 6 7 8 9 0 - = → Rat Ox Tiger Rabbit Dragon Snake Horse Ram Monkey Bird Dog Boar
+ * Keys: 1 2 3 4 5 6 7 8 9 0 - = → Rat Ox Tiger Rabbit Dragon Snake Horse Ram Monkey Bird Dog Boar;
+ *       q e r t → Confrontation Wind Spirit Fox
  *       Backspace = no hands, H = one hand only, W = hands too wide, X = wrong middle finger
  */
 import type { RawFrame, SignId } from "@/types/gestures";
 import type { HandSource } from "./handTracker";
 import { poseForSign, syntheticFrame, type PoseOptions } from "./syntheticHand";
 
-export const SYNTH_KEYS: SignId[] = ["RAT", "OX", "TIGER", "RABBIT", "DRAGON", "SNAKE", "HORSE", "RAM", "MONKEY", "BIRD", "DOG", "BOAR"];
-const KEY_ORDER = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "="];
+export const SYNTH_KEYS: SignId[] = ["RAT", "OX", "TIGER", "RABBIT", "DRAGON", "SNAKE", "HORSE", "RAM", "MONKEY", "BIRD", "DOG", "BOAR", "CONFRONT", "WIND", "SPIRIT", "FOX"];
+const KEY_ORDER = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "q", "e", "r", "t"];
 
 export interface SyntheticControl {
   set(sign: SignId | null, opts?: PoseOptions): void;
