@@ -41,7 +41,10 @@ export interface DuelUi {
 }
 const IDLE_DUEL: DuelUi = { status: "idle", code: "", error: null, opponent: null, opponentReady: false, role: null, forfeit: false };
 
-const LS_PROGRESS = "shinobi.progress";
+// v2: the 27-chapter story. Old 13-chapter progress is carried over proportionally.
+const LS_PROGRESS = "shinobi.progress.v2";
+const LS_PROGRESS_V1 = "shinobi.progress";
+const V1_CHAPTERS = 13;
 const LS_RECORDS = "shinobi.records";
 const LS_DOJO = "shinobi.dojo";
 
@@ -146,7 +149,12 @@ export class GameSession {
   };
   loadProgress() {
     try {
-      const n = Number(localStorage.getItem(LS_PROGRESS) ?? 0);
+      let raw = localStorage.getItem(LS_PROGRESS);
+      if (raw == null) {
+        const old = Number(localStorage.getItem(LS_PROGRESS_V1) ?? 0);
+        raw = String(Number.isFinite(old) && old > 0 ? Math.round((Math.min(old, V1_CHAPTERS) / V1_CHAPTERS) * CHAPTERS.length) : 0);
+      }
+      const n = Number(raw);
       this.progress = Number.isFinite(n) ? Math.max(0, Math.min(CHAPTERS.length, n)) : 0;
     } catch {
       this.progress = 0;

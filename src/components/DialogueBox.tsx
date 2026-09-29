@@ -29,7 +29,8 @@ export function DialogueBox() {
 
   const nameOf = (c: Character | null) => (c ? tr(c.name) : "");
   const enemyName = enemy ? (sameAsHero ? t("shadowOf", { name: tr(enemy.name) }) : tr(enemy.name)) : "";
-  const speaker: Character | null = !line ? null : line.speaker === "hero" ? hero : line.speaker === "mentor" ? mentor : line.speaker === "enemy" ? enemy : null;
+  const ally = line?.speaker === "ally" && line.who ? CHARACTERS[line.who] : null;
+  const speaker: Character | null = !line ? null : line.speaker === "hero" ? hero : line.speaker === "mentor" ? mentor : line.speaker === "enemy" ? enemy : ally;
   const speakerName = !line ? "" : line.speaker === "narrator" ? t("narrator") : line.speaker === "enemy" ? enemyName : nameOf(speaker);
   const text = line ? tr(line.text, { hero: nameOf(hero), mentor: nameOf(mentor), enemy: enemyName }) : "";
 
@@ -62,8 +63,9 @@ export function DialogueBox() {
 
   if (!line) return null;
   const leftActive = line.speaker === "hero";
-  const rightChar = line.speaker === "mentor" ? mentor : enemy;
-  const rightActive = line.speaker === "mentor" || line.speaker === "enemy";
+  // Right side: whoever speaks to the hero (mentor, ally, enemy); the narrator keeps the last one on stage.
+  const rightChar = line.speaker === "mentor" ? mentor : ally ?? enemy;
+  const rightActive = line.speaker === "mentor" || line.speaker === "enemy" || line.speaker === "ally";
 
   return (
     <div className="dialogue" onClick={advance} role="dialog" aria-live="polite">

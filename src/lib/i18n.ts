@@ -110,7 +110,7 @@ export const STR = {
   // mode select
   chooseMode: { ru: "ВЫБЕРИ РЕЖИМ", en: "CHOOSE A MODE" },
   storyTitle: { ru: "ИСТОРИЯ", en: "STORY" },
-  storyDesc: { ru: "13 глав в 4 частях, 12 противников, 23 локации. Диалоги, наставник и новые техники по ходу истории.", en: "13 chapters in 4 arcs, 12 opponents, 23 locations. Dialogue, a mentor and new jutsu along the way." },
+  storyDesc: { ru: "27 глав в 4 частях: от выпускного экзамена до последнего Оцуцуки. Союзники, наставники и новые техники по ходу истории.", en: "27 chapters in 4 parts: from the graduation exam to the last Ōtsutsuki. Allies, mentors and new jutsu along the way." },
   quickTitle: { ru: "БЫСТРЫЙ БОЙ", en: "QUICK BATTLE" },
   quickDesc: { ru: "Все техники сразу, один злодей, результат за 2 минуты. Идеально для демо.", en: "Every jutsu unlocked, one villain, a result in 2 minutes. Perfect for a demo." },
 

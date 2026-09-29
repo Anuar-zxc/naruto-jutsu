@@ -61,6 +61,7 @@ export function ChapterSelect() {
               <div className="chapter-info">
                 <div className="chapter-n">{t("chapterN", { n: i + 1 })}</div>
                 <div className="chapter-title">{tr(ch.title)}</div>
+                {!locked && <div className="chapter-brief">{tr(ch.brief)}</div>}
                 <div className="chapter-meta">
                   {locked ? "🔒" : `${tr(enemy.name)} · ${tr(loc.name)}`}
                 </div>

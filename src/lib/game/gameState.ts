@@ -15,7 +15,7 @@ import type { GameAction, GameState, GameStats, JutsuId, Phase, Status } from "@
 import { BOSS, JUTSU, JUTSU_ORDER, LOADOUT_SIZE } from "./jutsu";
 import { castResult, pointsForSign } from "./scoring";
 import { CHARACTERS, bossFor, damageMultiplier, mentorFor } from "./characters";
-import { CHAPTERS, jutsuForChapter } from "./story";
+import { CHAPTERS, jutsuForChapter, linesFor } from "./story";
 import { LOCATIONS, QUICK_ROTATION, type Location } from "./locations";
 import { focusMult, hpMult, noUpgrades, powerMult, speedBonusMs, startShields } from "./profile";
 
@@ -180,7 +180,7 @@ export function locationFor(s: GameState): Location {
 /** Dialogue lines for the current dialogue part. */
 export function dialogueLines(s: GameState) {
   if (s.chapter == null || !s.dialogue) return [];
-  return CHAPTERS[s.chapter][s.dialogue.part];
+  return linesFor(CHAPTERS[s.chapter], s.dialogue.part, s.characterId, s.bossId);
 }
 
 /** How hard the enemy hits back when a jutsu fails (grows through the story). */

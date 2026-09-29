@@ -10,7 +10,7 @@ import { JUTSU, JUTSU_LIST } from "../src/lib/game/jutsu";
 import { rankFor, accuracy } from "../src/lib/game/scoring";
 import { comboMultiplier } from "../src/lib/game/combo";
 import { CHARACTERS, CHARACTER_LIST, damageMultiplier, randomBossFor } from "../src/lib/game/characters";
-import { CHAPTERS } from "../src/lib/game/story";
+import { CHAPTERS, linesFor } from "../src/lib/game/story";
 import { LOCATIONS } from "../src/lib/game/locations";
 import { GameSession, TIMING } from "../src/lib/game/session";
 import { GestureRecognizer } from "../src/lib/vision/gestureRecognizer";
@@ -64,15 +64,17 @@ async function main() {
     }
   });
 
-  await test("content: 13 chapters in 4 arcs, every line bilingual, every jutsu unlocked once", () => {
-    assert.equal(CHAPTERS.length, 13);
+  await test("content: 27 chapters in 4 arcs, every line bilingual, every jutsu unlocked once", () => {
+    assert.equal(CHAPTERS.length, 27);
     const unlocked: string[] = [];
     for (const [i, ch] of CHAPTERS.entries()) {
       assert.ok(LOCATIONS[ch.location]?.image, `chapter ${i} location art`);
       if (ch.enemy !== "mentor") assert.ok(CHARACTERS[ch.enemy], `chapter ${i} enemy ${ch.enemy}`);
       for (const l of [...ch.intro, ...ch.outro]) assert.ok(l.text.ru && l.text.en, `chapter ${i} line`);
       assert.ok(ch.taunt.ru && ch.taunt.en && ch.reply.ru && ch.reply.en);
-      assert.ok(ch.intro.length >= 4, `chapter ${i} intro is a real scene`);
+      assert.ok(ch.intro.length >= 6, `chapter ${i} intro is a real scene`);
+      assert.ok(ch.brief.ru && ch.brief.en, `chapter ${i} brief`);
+      for (const l of [...ch.intro, ...ch.outro]) if (l.speaker === "ally") assert.ok(l.who && CHARACTERS[l.who], `chapter ${i} ally ${l.who}`);
       unlocked.push(...ch.unlocks);
     }
     assert.deepEqual([...unlocked].sort(), [...JUTSU_LIST.map((j) => j.id)].sort());
@@ -245,8 +247,14 @@ async function main() {
     s = reduce(s, { type: "DIALOGUE_SKIP" });
     assert.equal(s.phase, "CHAPTER_SELECT");
     s = reduce(s, { type: "SELECT_CHAPTER", index: 1 }, { type: "DIALOGUE_SKIP" });
-    assert.equal(s.bossId, "kisame");
-    assert.ok(availableJutsu(s).includes("GOKAKYU"));
+    assert.equal(s.bossId, "zabuza");
+    assert.ok(availableJutsu(s).includes("SUIRYUDAN"));
+    // Ally lines spoken by the player's own character are skipped.
+    const asGaara = reduce(menu(), { type: "SELECT_MODE", mode: "story" }, { type: "SELECT_CHARACTER", id: "gaara" }, { type: "SELECT_CHAPTER", index: 6 });
+    assert.ok(dialogueLines(asGaara).length > 0);
+    const outroGaara = linesFor(CHAPTERS[6], "outro", "gaara", "kimimaro");
+    assert.ok(outroGaara.every((l) => l.who !== "gaara"));
+    assert.ok(linesFor(CHAPTERS[6], "outro", "naruto", "kimimaro").some((l) => l.who === "gaara"));
     const kak = reduce(menu(), { type: "SELECT_MODE", mode: "story" }, { type: "SELECT_CHARACTER", id: "kakashi" }, { type: "SELECT_CHAPTER", index: 0 });
     assert.equal(kak.bossId, "jiraiya", "mentor is never the player");
   });

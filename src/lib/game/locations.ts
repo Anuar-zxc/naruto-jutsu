@@ -23,7 +23,13 @@ export type LocationId =
   | "tenchi"
   | "canyon"
   | "cliffs"
-  | "tsukuyomi";
+  | "tsukuyomi"
+  | "mistlake"
+  | "tanzaku"
+  | "soundborder"
+  | "narawoods"
+  | "summit"
+  | "raintower";
 
 /** SVG scenes drawn in code (see components/StageScenes.tsx) — fallback when no artwork. */
 export type SceneId = "bridge" | "forest" | "rain" | "battlefield" | "crater" | "moon";
@@ -62,6 +68,12 @@ export const LOCATIONS: Record<LocationId, Location> = {
   tenchi: { id: "tenchi", name: { ru: "Мост Тэнти", en: "Tenchi Bridge" }, image: img("bridge") },
   canyon: { id: "canyon", name: { ru: "Каньон тренировок", en: "Training Canyon" }, image: img("canyon") },
   cliffs: { id: "cliffs", name: { ru: "Лунные скалы", en: "Moonlit Cliffs" }, image: img("cliffs") },
+  mistlake: { id: "mistlake", name: { ru: "Озеро в тумане, Страна Волн", en: "Misty Lake, Land of Waves" }, image: img("mistlake") },
+  tanzaku: { id: "tanzaku", name: { ru: "Город Танзаку", en: "Tanzaku Town" }, image: img("tanzaku") },
+  soundborder: { id: "soundborder", name: { ru: "Граница Страны Звука", en: "Land of Sound Border" }, image: img("soundborder") },
+  narawoods: { id: "narawoods", name: { ru: "Лес клана Нара", en: "Nara Clan Forest" }, image: img("narawoods") },
+  summit: { id: "summit", name: { ru: "Страна Железа, совет Каге", en: "Land of Iron, Kage Summit" }, image: img("summit") },
+  raintower: { id: "raintower", name: { ru: "Башня Нагато", en: "Nagato's Tower" }, image: img("raintower") },
   tsukuyomi: { id: "tsukuyomi", name: { ru: "Бесконечное Цукуёми", en: "Infinite Tsukuyomi" }, image: img("tsukuyomi") },
 };
 
@@ -69,4 +81,5 @@ export const LOCATIONS: Record<LocationId, Location> = {
 export const QUICK_ROTATION: LocationId[] = [
   "village", "arena", "forest", "suna", "rain", "battlefield", "valley", "hideout",
   "stone", "desert", "konohanight", "tenchi", "canyon", "redmoon", "cliffs", "tsukuyomi", "lair", "ruins",
+  "mistlake", "tanzaku", "soundborder", "narawoods", "summit", "raintower",
 ];
