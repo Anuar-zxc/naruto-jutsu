@@ -98,7 +98,12 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
   const [audioToast, setAudioToast] = useState<{ text: string; key: number } | null>(null);
 
   // Auto quality: if tracking can't keep up, drop the heavy decorative effects.
-  useEffect(() => session.subscribeLive(() => reportFps(session.getLive().fps)), [session]);
+  useEffect(() => {
+    const off = session.subscribeLive(() => reportFps(session.getLive().fps));
+    return () => {
+      off();
+    };
+  }, [session]);
 
   // --- setup ------------------------------------------------------------------
   useEffect(() => {
