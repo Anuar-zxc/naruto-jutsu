@@ -54,6 +54,8 @@ export interface GameStats {
   /** Time actually spent performing seals (ms). */
   playMs: number;
   totalDamage: number;
+  /** Mistakes per seal the player was SUPPOSED to make (for the sensei's review). */
+  weak: Partial<Record<SignId, number>>;
 }
 
 export interface CastResult {

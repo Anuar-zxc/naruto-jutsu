@@ -31,6 +31,7 @@ import { JutsuSelect } from "./JutsuSelect";
 import { JutsuSequence } from "./JutsuSequence";
 import { DefeatPanel, FailedPanel, ResultScreen } from "./ResultScreen";
 import { Dojo } from "./Dojo";
+import { askSensei, tauntRequest } from "@/lib/ai/sensei";
 
 const LS_MUTE = "shinobi.muted";
 const LS_MUSIC = "shinobi.music";
@@ -203,10 +204,17 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
     }
 
     // Enemy taunt when HP first drops below half (story mode).
-    if (g.mode === "story" && g.chapter != null && p.bossHp > p.bossMaxHp / 2 && g.bossHp <= g.bossMaxHp / 2 && g.bossHp > 0) {
-      const line = tr(CHAPTERS[g.chapter].taunt);
-      setTimeout(() => setTaunt(line), 900);
-      setTimeout(() => setTaunt(null), 4200);
+    // Villain taunt when HP first drops below half: written live by the AI, with a scripted fallback.
+    if (g.mode !== "training" && p.bossHp > p.bossMaxHp / 2 && g.bossHp <= g.bossMaxHp / 2 && g.bossHp > 0) {
+      const fallback = g.mode === "story" && g.chapter != null ? tr(CHAPTERS[g.chapter].taunt) : null;
+      const started = Date.now();
+      void askSensei(tauntRequest(g, "lowhp"), 5000).then((ai) => {
+        const line = ai ?? fallback;
+        if (!line) return;
+        const wait = Math.max(0, 900 - (Date.now() - started));
+        setTimeout(() => setTaunt(line), wait);
+        setTimeout(() => setTaunt(null), wait + 4500);
+      });
     }
 
     if (g.phase === p.phase) return;

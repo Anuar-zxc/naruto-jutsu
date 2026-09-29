@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "tsx tests/vision.test.ts && tsx tests/game.test.ts",
+    "test": "tsx tests/vision.test.ts && tsx tests/game.test.ts && tsx tests/ai.test.ts",
     "postinstall": "node scripts/setup-mediapipe.mjs"
   },
   "dependencies": {

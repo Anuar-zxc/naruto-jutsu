@@ -187,6 +187,11 @@ export const STR = {
   dojoExit: { ru: "ЗАКОНЧИТЬ ТРЕНИРОВКУ", en: "LEAVE THE DOJO" },
   newRecord: { ru: "НОВЫЙ РЕКОРД!", en: "NEW RECORD!" },
   bestScore: { ru: "Рекорд: {n}", en: "Best: {n}" },
+  senseiReview: { ru: "РАЗБОР БОЯ · {name}", en: "DEBRIEF · {name}" },
+  senseiThinking: { ru: "Сенсей разбирает твой бой", en: "Your sensei is reviewing the fight" },
+  askSensei: { ru: "СОВЕТ СЕНСЕЯ", en: "ASK THE SENSEI" },
+  senseiBusy: { ru: "Сенсей думает…", en: "Sensei is thinking…" },
+  senseiOffline: { ru: "Сенсей сейчас медитирует (ИИ недоступен). Следи за подсказками на камере — они точные.", en: "The sensei is meditating (AI unavailable). Follow the on-camera hints — they're precise." },
   rowHpLeft: { ru: "ЧАКРА", en: "CHAKRA LEFT" },
 } satisfies Record<string, L>;
 

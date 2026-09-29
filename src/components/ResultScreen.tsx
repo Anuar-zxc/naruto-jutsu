@@ -7,6 +7,9 @@ import { CHARACTERS } from "@/lib/game/characters";
 import { CHAPTERS } from "@/lib/game/story";
 import { t, tr, type StrKey } from "@/lib/i18n";
 import { Portrait } from "./Portrait";
+import { SenseiReview } from "./SenseiReview";
+import { useEffect, useState } from "react";
+import { askSensei, tauntRequest } from "@/lib/ai/sensei";
 
 export function ResultScreen({ onExit }: { onExit: () => void }) {
   useLang();
@@ -52,6 +55,7 @@ export function ResultScreen({ onExit }: { onExit: () => void }) {
             </div>
           ))}
         </div>
+        <SenseiReview outcome="victory" />
         <div className="result-actions">
           {story ? (
             <button className="btn primary" onClick={() => session.dispatch({ type: "STORY_OUTRO" })} data-action="continue">
@@ -76,6 +80,15 @@ export function FailedPanel() {
   const session = useSession();
   const g = useGame();
   const foe = g.bossId ? tr(CHARACTERS[g.bossId].name) : "?";
+  const [line, setLine] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void askSensei(tauntRequest(g, "failed"), 6000).then((r) => alive && setLine(r));
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
     <div className="modal modal-delayed">
       <div className="modal-card failed">
@@ -86,6 +99,14 @@ export function FailedPanel() {
           <div className="failed-strike">
             <b>{t("enemyStrikes", { foe, n: g.lastEnemyHit.amount })}</b>
             <span>{t("hpLeft", { hp: g.playerHp, max: g.playerMaxHp })}</span>
+          </div>
+        )}
+        {line && (
+          <div className="villain-line">
+            {g.bossId && <Portrait ch={CHARACTERS[g.bossId]} className="vl-img" />}
+            <p>
+              <b>{foe}:</b> «{line}» <em className="ai-badge">alem.ai</em>
+            </p>
           </div>
         )}
         <div className="result-actions">
@@ -114,6 +135,7 @@ export function DefeatPanel({ onExit }: { onExit: () => void }) {
         <div className="defeat-kanji">敗</div>
         <div className="result-head">{t("defeat")}</div>
         <div className="result-sub">{t("defeatSub", { foe: foe ? tr(foe.name) : "?" })}</div>
+        <SenseiReview outcome="defeat" />
         <div className="defeat-tip">{t("defeatTip")}</div>
         <div className="result-actions">
           <button className="btn primary" onClick={() => session.dispatch({ type: "RESTART" })} data-action="rematch">

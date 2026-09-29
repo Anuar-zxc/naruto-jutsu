@@ -31,6 +31,7 @@ export const emptyStats = (): GameStats => ({
   failedCount: 0,
   playMs: 0,
   totalDamage: 0,
+  weak: {},
 });
 
 export const initialGameState = (): GameState => ({
@@ -271,13 +272,16 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
       };
     }
 
-    case "MISTAKE":
+    case "MISTAKE": {
+      const want = s.jutsuId ? JUTSU[s.jutsuId].sequence[s.seqIndex] : null;
+      const weak = want ? { ...s.stats.weak, [want]: (s.stats.weak[want] ?? 0) + 1 } : s.stats.weak;
       return {
         ...s,
         jutsuMistakes: s.jutsuMistakes + 1,
         eventId: s.eventId + 1,
-        stats: { ...s.stats, mistakes: s.stats.mistakes + 1, combo: 0 },
+        stats: { ...s.stats, mistakes: s.stats.mistakes + 1, combo: 0, weak },
       };
+    }
 
     case "SUCCESS_DONE": {
       const j = JUTSU[s.jutsuId!];

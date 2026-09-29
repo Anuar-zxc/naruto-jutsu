@@ -6,6 +6,8 @@ import { SIGN_LIST, SIGNS } from "@/lib/vision/gestureDefinitions";
 import { TRAIN_MASTERY } from "@/lib/game/gameState";
 import { t, tr } from "@/lib/i18n";
 import { HandPictogram } from "./HandPictogram";
+import { useEffect, useRef, useState } from "react";
+import { askSensei, dojoRequest } from "@/lib/ai/sensei";
 
 /**
  * Dojo side panel: the target seal, a mastery streak, and the full seal board.
@@ -17,7 +19,26 @@ export function Dojo() {
   const live = useLive();
   const session = useSession();
   const tr0 = g.training;
+  const [tip, setTip] = useState<{ text: string | null; busy: boolean; ai: boolean } | null>(null);
+  const lastCorrection = useRef<string | undefined>(undefined);
+  if (live.feedback?.message) lastCorrection.current = live.feedback.message;
+  // A new seal gets a fresh tip.
+  useEffect(() => {
+    setTip(null);
+    lastCorrection.current = undefined;
+  }, [tr0?.sign]);
   if (!tr0) return null;
+  const ask = () => {
+    const req = dojoRequest(g, lastCorrection.current);
+    if (!req) return;
+    session.sfx.select();
+    setTip({ text: null, busy: true, ai: false });
+    const sign = tr0.sign;
+    void askSensei(req, 9000).then((r) => {
+      if (session.getState().training?.sign !== sign) return;
+      setTip({ text: r ?? t("senseiOffline"), busy: false, ai: !!r });
+    });
+  };
   const def = SIGNS[tr0.sign];
   const mastered = new Set([...session.getDojoMastered(), ...tr0.mastered]);
   const done = tr0.streak >= TRAIN_MASTERY;
@@ -49,6 +70,18 @@ export function Dojo() {
       </div>
 
       <p className="dojo-hint">{t("dojoHint", { n: TRAIN_MASTERY })}</p>
+
+      <div className="dojo-sensei">
+        <button className="btn small sensei-btn" onClick={ask} disabled={tip?.busy} data-action="ask-sensei">
+          ✦ {t("askSensei")}
+        </button>
+        {tip && (
+          <p className={`dojo-tip ${tip.busy ? "thinking" : ""}`} key={tip.text ?? "busy"}>
+            {tip.busy ? t("senseiBusy") : tip.text}
+            {tip.ai && <em className="ai-badge">alem.ai</em>}
+          </p>
+        )}
+      </div>
 
       <div className="dojo-board">
         {SIGN_LIST.map((s) => (

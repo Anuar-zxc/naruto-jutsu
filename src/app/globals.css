@@ -3025,3 +3025,93 @@ body::after {
   .hud-hero { margin-right: auto; min-width: 0; }
   .hud-stats { order: 3; width: 100%; justify-content: space-around; }
 }
+
+/* ==========================================================================
+   v6 · AI sensei & villain voices (alem.plus LLM)
+   ========================================================================== */
+.ai-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  vertical-align: middle;
+  color: #06121a;
+  background: linear-gradient(90deg, #2ec5ff, #7cf2ff);
+  box-shadow: 0 0 10px rgba(46, 197, 255, 0.6);
+}
+.sensei {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 12px;
+  align-items: start;
+  margin: 16px 0 6px;
+  padding: 12px 14px;
+  text-align: left;
+  border-radius: 14px;
+  border: 1px solid rgba(46, 197, 255, 0.3);
+  background: linear-gradient(135deg, rgba(46, 197, 255, 0.1), rgba(0, 0, 0, 0.25));
+  animation: rise 0.4s 0.2s ease-out both;
+}
+.sensei .sensei-img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  object-position: top;
+  border-radius: 50%;
+  border: 2px solid rgba(46, 197, 255, 0.6);
+  background: #111922;
+}
+.sensei-head span { font-family: var(--font-display); font-size: 17px; letter-spacing: 0.14em; color: #7cd8ff; }
+.sensei-text { margin: 6px 0 0; font-size: 15px; line-height: 1.45; font-weight: 600; color: var(--text); min-height: 2.9em; }
+.sensei-text.thinking, .dojo-tip.thinking { color: var(--muted); }
+.dots { display: inline-flex; gap: 3px; margin-left: 6px; }
+.dots i { width: 5px; height: 5px; border-radius: 50%; background: #7cd8ff; animation: dot 1s infinite ease-in-out; }
+.dots i:nth-child(2) { animation-delay: 0.15s; }
+.dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes dot { 0%, 100% { opacity: 0.2; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }
+.result-card { max-height: calc(100vh - 32px); overflow-y: auto; }
+
+.villain-line {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 10px 0 2px;
+  text-align: left;
+  animation: rise 0.35s ease-out both;
+}
+.villain-line .vl-img {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  object-position: top;
+  border-radius: 50%;
+  border: 2px solid var(--red);
+  background: #1a0d12;
+}
+.villain-line p { margin: 0; font-size: 14px; font-weight: 600; font-style: italic; color: #ffd0d5; }
+.villain-line b { font-style: normal; color: #ff6b7a; }
+
+.dojo-sensei { display: grid; gap: 8px; }
+.sensei-btn {
+  justify-self: start;
+  border-color: rgba(46, 197, 255, 0.5) !important;
+  color: #7cd8ff !important;
+}
+.sensei-btn:disabled { opacity: 0.6; cursor: wait; }
+.dojo-tip {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border-left: 3px solid #2ec5ff;
+  background: rgba(46, 197, 255, 0.08);
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 600;
+  animation: rise 0.3s ease-out both;
+}
+.defeat-card .result-head { font-size: clamp(40px, 6vw, 64px); letter-spacing: 0.12em; overflow-wrap: anywhere; }
