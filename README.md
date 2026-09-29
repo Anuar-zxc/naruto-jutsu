@@ -1,4 +1,4 @@
-# SHINOBI — JUTSU
+# Naruto Jutsu (SHINOBI — JUTSU)
 
 > **Your hands are the controller.**
 

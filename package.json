@@ -1,5 +1,5 @@
 {
-  "name": "shinobi-jutsu",
+  "name": "naruto-jutsu",
   "version": "1.0.0",
   "private": true,
   "description": "Webcam hand-sign battle game: MediaPipe hand tracking + custom gesture recognition + error mode.",
