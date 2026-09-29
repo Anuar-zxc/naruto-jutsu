@@ -33,7 +33,7 @@ export type CharacterId =
   | "obito"
   | "obito-six-paths"
   | "madara"
-  | "madara-six-paths"
+  | "momoshiki"
   | "isshiki";
 
 export interface Character {
@@ -132,9 +132,9 @@ export const CHARACTERS: Record<CharacterId, Character> = {
     timeBonusMs: -2000,
     dmg: { all: 1.2 },
   }),
-  "madara-six-paths": c("madara-six-paths", { ru: "Мадара", en: "Madara" }, { ru: "Джинчурики Десятихвостого", en: "Ten-Tails Jinchūriki" }, "#d9d4e8", "輪", {
+  momoshiki: c("momoshiki", { ru: "Момошики", en: "Momoshiki" }, { ru: "Оцуцуки, пожирающий чакру", en: "Ōtsutsuki Chakra Devourer" }, "#d9d4e8", "桃", {
     villain: true,
-    tag: { ru: "ШЕСТЬ ПУТЕЙ", en: "SIX PATHS" },
+    tag: { ru: "ОЦУЦУКИ", en: "ŌTSUTSUKI" },
     perk: { ru: "+25% урона ко всему", en: "+25% all damage" },
     dmg: { all: 1.25 },
   }),
@@ -217,7 +217,7 @@ export const CHARACTERS: Record<CharacterId, Character> = {
 const ORDER: CharacterId[] = [
   "naruto", "naruto-six-paths", "sasuke", "sakura", "kakashi", "minato", "jiraiya", "hashirama",
   "shikamaru", "shisui", "boruto", "boruto-karma", "mitsuki",
-  "itachi", "kisame", "hidan", "konan", "pain", "kawaki", "obito", "obito-six-paths", "madara", "madara-six-paths", "isshiki",
+  "itachi", "kisame", "hidan", "konan", "pain", "kawaki", "obito", "obito-six-paths", "madara", "momoshiki", "isshiki",
 ];
 
 export const CHARACTER_LIST: Character[] = ORDER.map((id) => CHARACTERS[id]);
