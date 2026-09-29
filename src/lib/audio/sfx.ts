@@ -1,15 +1,24 @@
 /**
- * All sound effects are synthesised at runtime with the Web Audio API —
- * no audio files, nothing copyrighted, zero download size.
+ * Sound effects. Two layers:
+ *   1. Audio clips supplied by the project owner in /public/assets/sfx/*.mp3
+ *      (loaded lazily after the first user gesture), used for the big moments.
+ *   2. Sounds synthesised live with the Web Audio API — used for everything
+ *      else, and as the fallback whenever a clip is missing or still loading.
  */
 import type { Element } from "@/types/game";
 
 type Ctx = AudioContext;
 
+/** Clip ids → files in /public/assets/sfx. */
+export const SFX_CLIPS = ["charge", "fire", "lightning", "rasengan", "strike", "victory-voice", "defeat", "signs"] as const;
+export type ClipId = (typeof SFX_CLIPS)[number];
+
 export class Sfx {
   private ctx: Ctx | null = null;
   private master: GainNode | null = null;
   private noiseBuf: AudioBuffer | null = null;
+  private clips = new Map<ClipId, AudioBuffer>();
+  private clipsRequested = false;
   muted = false;
 
   /** Must be called from a user gesture (browser autoplay policy). */
@@ -28,6 +37,49 @@ export class Sfx {
       for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
     }
     if (this.ctx.state === "suspended") void this.ctx.resume();
+    this.loadClips();
+  }
+
+  private loadClips() {
+    if (this.clipsRequested || !this.ctx) return;
+    this.clipsRequested = true;
+    const c = this.ctx;
+    for (const id of SFX_CLIPS) {
+      fetch(`/assets/sfx/${id}.mp3`)
+        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(r.status)))
+        .then((b) => c.decodeAudioData(b))
+        .then((buf) => this.clips.set(id, buf))
+        .catch(() => {
+          /* missing clip → synth fallback */
+        });
+    }
+  }
+
+  /** Play a clip if it's loaded. Returns false so callers can fall back to synth. */
+  private clip(id: ClipId, opts: { gain?: number; delay?: number; maxDur?: number } = {}): boolean {
+    const c = this.ready();
+    const buf = this.clips.get(id);
+    if (!c || !buf) return false;
+    const t0 = c.currentTime + (opts.delay ?? 0);
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    const g = c.createGain();
+    const vol = opts.gain ?? 0.9;
+    g.gain.setValueAtTime(vol, t0);
+    const dur = Math.min(buf.duration, opts.maxDur ?? buf.duration);
+    if (dur < buf.duration) {
+      g.gain.setValueAtTime(vol, t0 + Math.max(0, dur - 0.25));
+      g.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+    }
+    src.connect(g).connect(this.master!);
+    src.start(t0);
+    src.stop(t0 + dur + 0.02);
+    return true;
+  }
+
+  /** Countdown start: the hand-sign flurry clip. */
+  signs() {
+    this.clip("signs", { gain: 0.7, maxDur: 2.4 });
   }
 
   setMuted(m: boolean) {
@@ -115,11 +167,15 @@ export class Sfx {
   }
 
   charge() {
+    if (this.clip("charge", { gain: 0.8, maxDur: 1.1 })) return;
     this.noise(0.9, { type: "bandpass", freq: 300, to: 3500, q: 4, gain: 0.35, attack: 0.5 });
     this.tone(110, 0.9, { type: "sawtooth", gain: 0.08, to: 440, attack: 0.6 });
   }
 
   attack(el: Element) {
+    const clipFor: Partial<Record<Element, ClipId>> = { fire: "fire", lightning: "lightning", chakra: "rasengan" };
+    const id = clipFor[el];
+    if (id && this.clip(id, { gain: 1, maxDur: 3.4 })) return;
     if (el === "fire") {
       this.noise(0.9, { type: "lowpass", freq: 2500, to: 300, gain: 0.55, attack: 0.02 });
       this.tone(90, 0.7, { type: "sawtooth", gain: 0.12, to: 45 });
@@ -145,6 +201,7 @@ export class Sfx {
   }
 
   victory() {
+    if (this.clip("victory-voice", { gain: 1 })) return;
     [523, 659, 784, 1047, 784, 1047].forEach((f, i) => this.tone(f, 0.35, { type: "triangle", gain: 0.16, delay: i * 0.11 }));
     this.noise(1.4, { type: "highpass", freq: 3000, gain: 0.08, delay: 0.5, attack: 0.3 });
   }
@@ -156,12 +213,14 @@ export class Sfx {
 
   /** Enemy counter-attack landing on the player. */
   enemyStrike() {
+    if (this.clip("strike", { gain: 1 })) return;
     this.noise(0.35, { type: "bandpass", freq: 2200, to: 400, q: 2, gain: 0.45, attack: 0.01 });
     this.tone(95, 0.45, { type: "sawtooth", gain: 0.2, to: 38 });
     this.tone(60, 0.5, { type: "sine", gain: 0.45, to: 30, delay: 0.05 });
   }
 
   defeat() {
+    if (this.clip("defeat", { gain: 0.85 })) return;
     [392, 330, 262, 196, 131].forEach((f, i) => this.tone(f, 0.55, { type: "sawtooth", gain: 0.07, delay: i * 0.22 }));
     this.tone(65, 1.6, { type: "sine", gain: 0.3, to: 40, delay: 0.2 });
   }

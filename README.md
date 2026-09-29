@@ -86,6 +86,8 @@ Damage and time scale with the number of seals: 3 seals give 220 damage in 13 s,
 
 Each scene has its own track: menu, dialogue, battle, boss (enemy below 35% HP) and victory. By default the game plays an **original score generated live in the browser**: Japanese *in*-scale melodies on a koto-like pluck, a breathy flute pad and taiko drums. To use your own licensed soundtrack, put `menu.mp3`, `dialogue.mp3`, `battle.mp3`, `boss.mp3` and `victory.mp3` into `public/assets/music/`. The game detects them and cross-fades between tracks, and any file that's missing falls back to the generated score. The ♪ button in the HUD toggles music, 🔊 / M mutes everything.
 
+**Included audio (supplied by the project owner under the team's licence):** the soundtrack uses Naruto OST tracks for the menu (Toshiro Masuda), battle ("Fight"), boss (Madara's Perfect Susanoo theme) and victory ("Blue Bird"); dialogue keeps the generated score. Big moments use sound clips from `public/assets/sfx/` (charge, fire, Chidori, Rasengan, the enemy's strike, victory shout, defeat sting, hand-sign flurry); see the README there. All audio is loudness-normalised, and any missing clip falls back to the synthesised sound.
+
 ## Error Mode
 
 Error Mode is in `src/lib/vision/correctionEngine.ts`. It runs on every frame against the seal the player *should* be making.
