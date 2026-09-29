@@ -52,7 +52,7 @@ Real seals interlock the fingers of both hands. A webcam tracker can't see finge
 | Monkey | 申 | both palms open, fingers up | OPEN + OPEN, up |
 | Bird | 酉 | open palm · other hand index up | OPEN + INDEX |
 | Dog | 戌 | open palm held **above** a fist | OPEN over FIST |
-| Boar | 亥 | both palms open, fingers **down** | OPEN + OPEN, down |
+| Boar | 亥 | both palms open, one held **above** the other | OPEN + OPEN, stacked |
 
 ## Jutsu — real seal sequences
 

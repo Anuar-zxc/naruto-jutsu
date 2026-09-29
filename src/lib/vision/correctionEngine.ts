@@ -218,6 +218,14 @@ function stackRule(def: SignDefinition, f: FrameFeatures): Correction | null {
       highlight: { side: "both" },
     };
   }
+  if (def.stack === "stacked") {
+    return {
+      key: "stack:stacked",
+      kind: "stack",
+      text: { en: "Stack your palms: hold one hand clearly ABOVE the other.", ru: "Сложи ладони ярусом: одна рука заметно ВЫШЕ другой." },
+      highlight: { side: "both" },
+    };
+  }
   const [top, other] = asg.left === def.shapes[0] ? [left, right] : [right, left];
   const below = heightAbove(top, other) < 0;
   const topShape = HAND_SHAPES[def.shapes[0]].id === "OPEN" ? { en: "open palm", ru: "раскрытую ладонь" } : { en: "first hand", ru: "первую руку" };

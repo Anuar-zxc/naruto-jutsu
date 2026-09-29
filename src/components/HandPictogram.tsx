@@ -42,7 +42,7 @@ function Hand({ shape, side, x, y = 0, down = false }: { shape: HandShapeId; sid
 }
 
 export function HandPictogram({ def, size = 120 }: { def: SignDefinition; size?: number }) {
-  const stacked = def.stack === "topFirst";
+  const stacked = def.stack === "topFirst" || def.stack === "stacked";
   const gap = def.distance?.max != null ? 4 : stacked ? -30 : 16;
   const lift = stacked ? 44 : 0;
   const width = 54 * 2 + gap;

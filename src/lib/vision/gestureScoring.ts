@@ -75,6 +75,10 @@ export function stackFactor(def: SignDefinition, left: HandFeatures, right: Hand
     const dy = Math.abs(heightAbove(left, right));
     return dy <= 0.9 ? 1 : dy >= 1.6 ? 0 : 1 - (dy - 0.9) / 0.7;
   }
+  if (def.stack === "stacked") {
+    const dy = Math.abs(heightAbove(left, right));
+    return dy >= 1.0 ? 1 : dy <= 0.3 ? 0 : (dy - 0.3) / 0.7;
+  }
   // topFirst: the hand making shapes[0] must be above the other.
   const [top, other] = asg.left === def.shapes[0] ? [left, right] : [right, left];
   const dy = heightAbove(top, other);

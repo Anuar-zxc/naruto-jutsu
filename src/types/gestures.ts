@@ -125,8 +125,9 @@ export interface SignDefinition {
   /**
    * Vertical arrangement: "side" = hands at the same height,
    * "topFirst" = the hand making shapes[0] is ABOVE the other one.
+   * "stacked"  = one hand above the other, either way round.
    */
-  stack?: "side" | "topFirst";
+  stack?: "side" | "topFirst" | "stacked";
   /** How far (0..1) a finger's extension may drift from the ideal before it counts as wrong. */
   tolerance: number;
   /** Minimum confidence for this sign to be recognised. */

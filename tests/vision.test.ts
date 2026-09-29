@@ -48,8 +48,8 @@ test("sides: screen-left hand is the player's left", () => {
 test("pointing angle: 0 = up, + = toward screen right, ±180 = down", () => {
   const f = extractFrame({ hands: [syntheticHand({ side: "right", curls: curlsForShape("OPEN"), center: { x: 1, y: 0.5 }, tilt: 30 }, ASPECT)], aspect: ASPECT, t: 0 });
   assert.ok(Math.abs(f.hands[0].pointing - 30) < 8, `pointing=${f.hands[0].pointing}`);
-  const d = features("BOAR");
-  for (const h of d.hands) assert.ok(Math.abs(h.pointing) > 160, `boar pointing=${h.pointing}`);
+  const d = extractFrame({ hands: [syntheticHand({ side: "left", curls: curlsForShape("OPEN"), center: { x: 0.8, y: 0.5 }, tilt: 175 }, ASPECT)], aspect: ASPECT, t: 0 });
+  assert.ok(Math.abs(d.hands[0].pointing) > 160, `down pointing=${d.hands[0].pointing}`);
 });
 
 // --- Classification --------------------------------------------------------
@@ -63,6 +63,7 @@ test("all 12 zodiac seals are recognised under size / distance / tilt / noise va
     const variants: PoseOptions[] = [{}, { palm: 0.09 }, { palm: 0.22 }, { noise: 0.003 }, { tilt }, { swap: true }];
     if (def.distance?.max) variants.push({ distance: 0.9 }, { distance: def.distance.max - 0.2 });
     if (def.stack === "topFirst") variants.push({ dy: 1.2 }, { dy: 2.2 });
+    if (def.stack === "stacked") variants.push({ dy: 1.2 }, { dy: -1.6 });
     if (def.stack === "side") variants.push({ dy: 0.5 });
     for (const v of variants) {
       const f = features(def.id, v, seed++);
@@ -204,10 +205,12 @@ test("OX shown stacked → 'Hold your hands side by side, at the same height.'",
   assert.equal(en("OX", "DOG"), "Hold your hands side by side, at the same height.");
 });
 
-test("BOAR shown as MONKEY → 'Point your fingers DOWN …'; MONKEY shown as BOAR → fingers up", () => {
-  assert.match(en("BOAR", "MONKEY") ?? "", /^Point your fingers DOWN/);
-  assert.equal(correction("BOAR", "MONKEY")?.text.ru, "Направь пальцы ВНИЗ — ладони к полу.");
-  assert.match(en("MONKEY", "BOAR") ?? "", /^Point your (left|right) fingers up/);
+test("BOAR = stacked palms: side-by-side palms (MONKEY) get 'Stack your palms'; stacked palms are not MONKEY", () => {
+  assert.match(en("BOAR", "MONKEY") ?? "", /^Stack your palms/);
+  assert.equal(correction("BOAR", "MONKEY")?.text.ru, "Сложи ладони ярусом: одна рука заметно ВЫШЕ другой.");
+  assert.equal(en("MONKEY", "BOAR"), "Hold your hands side by side, at the same height.");
+  const rec = new GestureRecognizer();
+  assert.equal(rec.pickRaw(rec.classifyGesture(features("BOAR", { dy: -1.6 }))).sign, "BOAR", "either hand may be on top");
 });
 
 test("HORSE with right hand tilted outward → rotate inward", () => {

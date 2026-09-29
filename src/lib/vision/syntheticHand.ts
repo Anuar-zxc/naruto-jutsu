@@ -159,7 +159,7 @@ export function poseForSign(sign: SignId, o: PoseOptions = {}): SyntheticHandSpe
   const def = SIGNS[sign];
   const aspect = o.aspect ?? 16 / 9;
   const palm = o.palm ?? 0.15;
-  const stacked = def.stack === "topFirst";
+  const stacked = def.stack === "topFirst" || def.stack === "stacked";
   const distance = o.distance ?? (stacked ? 0.6 : def.distance?.max != null ? 1.4 : 2.0);
   const dy = o.dy ?? (stacked ? 1.6 : 0);
   const [a, b] = o.swap ? [def.shapes[1], def.shapes[0]] : def.shapes;

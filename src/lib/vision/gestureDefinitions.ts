@@ -108,6 +108,7 @@ export const SIGNS: Record<SignId, SignDefinition> = {
     howTo: { en: "Both palms open, fingers pointing up", ru: "Обе ладони раскрыты, пальцы смотрят вверх" },
     shapes: ["OPEN", "OPEN"],
     pointUp: true,
+    stack: "side",
   },
   BIRD: {
     ...base,
@@ -131,9 +132,9 @@ export const SIGNS: Record<SignId, SignDefinition> = {
     id: "BOAR",
     kanji: "亥",
     name: { en: "Boar", ru: "Кабан" },
-    howTo: { en: "Both palms open, fingers pointing DOWN", ru: "Обе ладони раскрыты, пальцы смотрят ВНИЗ" },
+    howTo: { en: "Both palms open, one held ABOVE the other", ru: "Обе ладони раскрыты, одна НАД другой" },
     shapes: ["OPEN", "OPEN"],
-    pointDown: true,
+    stack: "stacked",
   },
 };
 
