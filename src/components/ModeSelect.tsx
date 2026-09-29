@@ -3,6 +3,7 @@
 import { useSession } from "@/hooks/useGame";
 import { useLang } from "@/hooks/useLang";
 import { t } from "@/lib/i18n";
+import { SIGN_LIST } from "@/lib/vision/gestureDefinitions";
 import { useEffect, useState } from "react";
 import type { GameMode } from "@/types/game";
 
@@ -15,7 +16,7 @@ export function ModeSelect() {
     setBest(session.getRecords().quick?.score ?? null);
     try {
       const v = JSON.parse(localStorage.getItem("shinobi.dojo") ?? "[]");
-      setMastered(Array.isArray(v) ? v.length : 0);
+      setMastered(Array.isArray(v) ? v.filter((x) => SIGN_LIST.some((d) => d.id === x)).length : 0);
     } catch {
       /* ignore */
     }
@@ -44,7 +45,7 @@ export function ModeSelect() {
           <div className="mode-kanji">修行</div>
           <div className="mode-title">{t("dojoTitle")}</div>
           <div className="mode-desc">{t("dojoDesc")}</div>
-          <div className="mode-meta">{t("dojoMastered", { m: mastered })}</div>
+          <div className="mode-meta">{t("dojoMastered", { m: mastered, n: SIGN_LIST.length })}</div>
         </button>
       </div>
     </div>

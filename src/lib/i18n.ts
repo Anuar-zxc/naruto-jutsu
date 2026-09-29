@@ -98,7 +98,7 @@ export const STR = {
   // mode select
   chooseMode: { ru: "ВЫБЕРИ РЕЖИМ", en: "CHOOSE A MODE" },
   storyTitle: { ru: "ИСТОРИЯ", en: "STORY" },
-  storyDesc: { ru: "12 глав, 9 локаций, 11 злодеев. Диалоги, наставник и новые техники по ходу истории.", en: "12 chapters, 9 locations, 11 villains. Dialogue, a mentor and new jutsu along the way." },
+  storyDesc: { ru: "13 глав в 4 частях, 12 противников, 23 локации. Диалоги, наставник и новые техники по ходу истории.", en: "13 chapters in 4 arcs, 12 opponents, 23 locations. Dialogue, a mentor and new jutsu along the way." },
   quickTitle: { ru: "БЫСТРЫЙ БОЙ", en: "QUICK BATTLE" },
   quickDesc: { ru: "Все техники сразу, один злодей, результат за 2 минуты. Идеально для демо.", en: "Every jutsu unlocked, one villain, a result in 2 minutes. Perfect for a demo." },
 
@@ -178,11 +178,11 @@ export const STR = {
   toChapters: { ru: "К ГЛАВАМ", en: "CHAPTERS" },
   toMenu: { ru: "В МЕНЮ", en: "MENU" },
   dojoTitle: { ru: "ДОДЗЁ", en: "DOJO" },
-  dojoDesc: { ru: "Тренировка всех 12 печатей без таймера и урона. Живые подсказки, как исправить руки.", en: "Practise all 12 seals with no timer or damage. Live coaching on fixing your hands." },
+  dojoDesc: { ru: "Тренировка всех 24 печатей без таймера и урона. Живые подсказки, как исправить руки.", en: "Practise all 24 seals with no timer or damage. Live coaching on fixing your hands." },
   dojoHeader: { ru: "ДОДЗЁ · ТРЕНИРОВКА ПЕЧАТЕЙ", en: "DOJO · SEAL TRAINING" },
   dojoHint: { ru: "Сложи печать и удерживай, затем разожми руки и повтори. {n} раза подряд — печать освоена.", en: "Form the seal and hold it, then release and repeat. {n} in a row masters it." },
   dojoStreak: { ru: "Серия: {s} / {n}", en: "Streak: {s} / {n}" },
-  dojoMastered: { ru: "Освоено: {m} / 12", en: "Mastered: {m} / 12" },
+  dojoMastered: { ru: "Освоено: {m} / {n}", en: "Mastered: {m} / {n}" },
   dojoDone: { ru: "ПЕЧАТЬ ОСВОЕНА!", en: "SEAL MASTERED!" },
   dojoExit: { ru: "ЗАКОНЧИТЬ ТРЕНИРОВКУ", en: "LEAVE THE DOJO" },
   newRecord: { ru: "НОВЫЙ РЕКОРД!", en: "NEW RECORD!" },
@@ -236,7 +236,7 @@ export const STR = {
   effRecoil: { ru: "Отдача: огромный урон, но −{n} твоей чакры", en: "Recoil: huge damage, but costs {n} of your chakra" },
   effNone: { ru: "Чистая сила: высокий урон за 3 печати", en: "Pure force: big damage for just 3 seals" },
   arcLabel: { ru: "Часть", en: "Part" },
-  specialSeals: { ru: "+ 4 ОСОБЫЕ ПЕЧАТИ", en: "+ 4 SPECIAL SEALS" },
+  specialSeals: { ru: "+ 12 ОСОБЫХ ПЕЧАТЕЙ", en: "+ 12 SPECIAL SEALS" },
 } satisfies Record<string, L>;
 
 export type StrKey = keyof typeof STR;

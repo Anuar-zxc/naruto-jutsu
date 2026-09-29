@@ -7,15 +7,15 @@
  * the UI clearly labels it. The real game always uses the camera.
  *
  * Keys: 1 2 3 4 5 6 7 8 9 0 - = → Rat Ox Tiger Rabbit Dragon Snake Horse Ram Monkey Bird Dog Boar;
- *       q e r t → Confrontation Wind Spirit Fox
+ *       q e r t → Confrontation Wind Spirit Fox; y u i o p [ ] \\ → Fire Water Thunder Earth Moon Star Mountain Shield
  *       Backspace = no hands, H = one hand only, W = hands too wide, X = wrong middle finger
  */
 import type { RawFrame, SignId } from "@/types/gestures";
 import type { HandSource } from "./handTracker";
 import { poseForSign, syntheticFrame, type PoseOptions } from "./syntheticHand";
 
-export const SYNTH_KEYS: SignId[] = ["RAT", "OX", "TIGER", "RABBIT", "DRAGON", "SNAKE", "HORSE", "RAM", "MONKEY", "BIRD", "DOG", "BOAR", "CONFRONT", "WIND", "SPIRIT", "FOX"];
-const KEY_ORDER = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "q", "e", "r", "t"];
+export const SYNTH_KEYS: SignId[] = ["RAT", "OX", "TIGER", "RABBIT", "DRAGON", "SNAKE", "HORSE", "RAM", "MONKEY", "BIRD", "DOG", "BOAR", "CONFRONT", "WIND", "SPIRIT", "FOX", "FIRE", "WATER", "THUNDER", "EARTH", "MOON", "STAR", "MOUNTAIN", "SHIELD"];
+const KEY_ORDER = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "q", "e", "r", "t", "y", "u", "i", "o", "p", "[", "]", "\\"];
 
 export interface SyntheticControl {
   set(sign: SignId | null, opts?: PoseOptions): void;

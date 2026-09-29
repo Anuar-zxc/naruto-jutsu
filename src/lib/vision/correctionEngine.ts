@@ -76,6 +76,8 @@ function shapeText(side: HandSide, shape: HandShapeId): L {
       return { en: `${cap(side)} hand: index and middle fingers up, fold the rest.`, ru: `${SIDE.ruNom[side]}: указательный и средний вверх, остальные согни.` };
     case "HORNS":
       return { en: `${cap(side)} hand: index and pinky up, fold the middle two.`, ru: `${SIDE.ruNom[side]}: указательный и мизинец вверх, средние согни.` };
+    case "THREE":
+      return { en: `${cap(side)} hand: three fingers up (index, middle, ring), fold the pinky.`, ru: `${SIDE.ruNom[side]}: три пальца вверх (указательный, средний, безымянный), мизинец согни.` };
   }
 }
 
@@ -91,6 +93,8 @@ function bothShapeText(shape: HandShapeId): L {
       return { en: "Both hands: index and middle fingers up.", ru: "Обе руки: указательный и средний вверх." };
     case "HORNS":
       return { en: "Both hands: index and pinky up.", ru: "Обе руки: указательный и мизинец вверх." };
+    case "THREE":
+      return { en: "Both hands: three fingers up, pinkies folded.", ru: "Обе руки: три пальца вверх, мизинцы согнуты." };
   }
 }
 

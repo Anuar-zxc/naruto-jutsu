@@ -48,7 +48,7 @@ export function Dojo() {
     <div className="dojo">
       <div className="dojo-head">
         <span>{t("dojoHeader")}</span>
-        <b>{t("dojoMastered", { m: mastered.size })}</b>
+        <b>{t("dojoMastered", { m: mastered.size, n: SIGN_LIST.length })}</b>
       </div>
 
       <div className={`dojo-target ${done ? "done" : ""}`} key={tr0.sign}>

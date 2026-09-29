@@ -54,8 +54,8 @@ test("pointing angle: 0 = up, + = toward screen right, ±180 = down", () => {
 
 // --- Classification --------------------------------------------------------
 
-test("all 16 seals (12 zodiac + 4 special) are recognised under size / distance / tilt / noise variation", () => {
-  assert.equal(SIGN_LIST.length, 16);
+test("all 24 seals (12 zodiac + 12 special) are recognised under size / distance / tilt / noise variation", () => {
+  assert.equal(SIGN_LIST.length, 24);
   const rec = new GestureRecognizer();
   let seed = 3;
   for (const def of SIGN_LIST) {
@@ -71,6 +71,17 @@ test("all 16 seals (12 zodiac + 4 special) are recognised under size / distance 
       const pick = rec.pickRaw(scores);
       assert.equal(pick.sign, def.id, `${def.id} ${JSON.stringify(v)} → ${pick.sign} (${scores.slice(0, 3).map((s) => `${s.sign}:${s.confidence.toFixed(2)}`).join(", ")})`);
     }
+  }
+});
+
+test("all 24 seals have a unique rule set (shapes + relation)", () => {
+  const key = (d: (typeof SIGN_LIST)[number]) =>
+    [[...d.shapes].sort().join("+"), d.stack ?? "-", d.distance?.max ? "close" : "-", d.pointUp ? "up" : d.pointDown ? "down" : "-"].join("|");
+  const seen = new Map<string, string>();
+  for (const d of SIGN_LIST) {
+    const k = key(d);
+    assert.ok(!seen.has(k), `${d.id} duplicates ${seen.get(k)} (${k})`);
+    seen.set(k, d.id);
   }
 });
 

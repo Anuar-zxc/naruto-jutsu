@@ -19,6 +19,7 @@ export const HAND_SHAPES: Record<HandShapeId, HandShape> = {
   INDEX: { id: "INDEX", label: "index finger up", fingers: { index: 1, middle: 0, ring: 0, pinky: 0 } },
   PEACE: { id: "PEACE", label: "index + middle up", fingers: { index: 1, middle: 1, ring: 0, pinky: 0 } },
   HORNS: { id: "HORNS", label: "index + pinky up", fingers: { index: 1, middle: 0, ring: 0, pinky: 1 } },
+  THREE: { id: "THREE", label: "three fingers up", fingers: { index: 1, middle: 1, ring: 1, pinky: 0 } },
 };
 
 /** Hands closer than this (palm lengths between palm centres) count as "together". */
@@ -80,6 +81,7 @@ export const SIGNS: Record<SignId, SignDefinition> = {
     name: { en: "Snake", ru: "Змея" },
     howTo: { en: "Two fists clasped close together", ru: "Два кулака, сжатые вплотную" },
     shapes: ["FIST", "FIST"],
+    stack: "side",
     distance: { max: CLOSE_MAX },
   },
   HORSE: {
@@ -168,6 +170,75 @@ export const SIGNS: Record<SignId, SignDefinition> = {
     name: { en: "Fox", ru: "Лис" },
     howTo: { en: "One hand index + middle up, the other index + pinky up", ru: "На одной руке указательный и средний, на другой — указательный и мизинец" },
     shapes: ["PEACE", "HORNS"],
+  },
+
+  // --- Elemental seals: the "three fingers" hand + stacked variants -----------
+  FIRE: {
+    ...base,
+    id: "FIRE",
+    kanji: "火",
+    name: { en: "Fire", ru: "Огонь" },
+    howTo: { en: "Three fingers up on one hand, the other a fist", ru: "На одной руке три пальца вверх, другая — кулак" },
+    shapes: ["THREE", "FIST"],
+  },
+  WATER: {
+    ...base,
+    id: "WATER",
+    kanji: "水",
+    name: { en: "Water", ru: "Вода" },
+    howTo: { en: "Three fingers up on one hand, the other palm open", ru: "На одной руке три пальца вверх, другая ладонь раскрыта" },
+    shapes: ["THREE", "OPEN"],
+  },
+  THUNDER: {
+    ...base,
+    id: "THUNDER",
+    kanji: "雷",
+    name: { en: "Thunder", ru: "Гром" },
+    howTo: { en: "Three fingers up on one hand, only the index on the other", ru: "На одной руке три пальца вверх, на другой — только указательный" },
+    shapes: ["THREE", "INDEX"],
+  },
+  EARTH: {
+    ...base,
+    id: "EARTH",
+    kanji: "土",
+    name: { en: "Earth", ru: "Земля" },
+    howTo: { en: "Two fists, one held ABOVE the other", ru: "Два кулака, один НАД другим" },
+    shapes: ["FIST", "FIST"],
+    stack: "stacked",
+  },
+  MOON: {
+    ...base,
+    id: "MOON",
+    kanji: "月",
+    name: { en: "Moon", ru: "Луна" },
+    howTo: { en: "Three fingers up on one hand, index + middle on the other", ru: "На одной руке три пальца, на другой — указательный и средний" },
+    shapes: ["THREE", "PEACE"],
+  },
+  STAR: {
+    ...base,
+    id: "STAR",
+    kanji: "星",
+    name: { en: "Star", ru: "Звезда" },
+    howTo: { en: "Three fingers up on one hand, index + pinky on the other", ru: "На одной руке три пальца, на другой — указательный и мизинец" },
+    shapes: ["THREE", "HORNS"],
+  },
+  MOUNTAIN: {
+    ...base,
+    id: "MOUNTAIN",
+    kanji: "山",
+    name: { en: "Mountain", ru: "Гора" },
+    howTo: { en: "Both hands: three fingers up, hands together", ru: "Обе руки: три пальца вверх, руки вместе" },
+    shapes: ["THREE", "THREE"],
+    distance: { max: CLOSE_MAX },
+  },
+  SHIELD: {
+    ...base,
+    id: "SHIELD",
+    kanji: "盾",
+    name: { en: "Shield", ru: "Щит" },
+    howTo: { en: "Both palms open, one held ABOVE the other", ru: "Обе ладони раскрыты, одна НАД другой" },
+    shapes: ["OPEN", "OPEN"],
+    stack: "stacked",
   },
 };
 

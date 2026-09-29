@@ -98,10 +98,18 @@ export type SignId =
   | "CONFRONT"
   | "WIND"
   | "SPIRIT"
-  | "FOX";
+  | "FOX"
+  | "FIRE"
+  | "WATER"
+  | "THUNDER"
+  | "EARTH"
+  | "MOON"
+  | "STAR"
+  | "MOUNTAIN"
+  | "SHIELD";
 
 /** Per-hand finger configuration. Values: 1 = extended, 0 = curled. */
-export type HandShapeId = "FIST" | "OPEN" | "INDEX" | "PEACE" | "HORNS";
+export type HandShapeId = "FIST" | "OPEN" | "INDEX" | "PEACE" | "HORNS" | "THREE";
 
 export interface HandShape {
   id: HandShapeId;

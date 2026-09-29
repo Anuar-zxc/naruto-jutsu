@@ -35,7 +35,7 @@ Camera (getUserMedia, mirrored)
 
 The hot path runs **outside React**. Each camera frame goes tracker → recognizer → `GameSession` → canvas overlay. React only re-renders on game-state changes plus a live HUD capped at about 12 updates per second.
 
-## 16 seals: the 12 zodiac seals + 4 special seals
+## 24 seals: the 12 zodiac seals + 12 special seals
 
 Real seals interlock the fingers of both hands. A webcam tracker can't see fingers hidden behind the other hand, so each seal is a **camera-readable approximation**: one hand shape per hand, plus how the hands relate to each other (distance, height, direction). Where possible it keeps the look of the real seal. Every pair of seals differs in at least one clearly visible feature. The pictograms in the game are generated from the same definitions the classifier uses.
 
@@ -57,8 +57,16 @@ Real seals interlock the fingers of both hands. A webcam tracker can't see finge
 | *Wind* | 風 | open palm · other hand index + pinky | OPEN + HORNS |
 | *Spirit* | 霊 | index up · other hand index + pinky | INDEX + HORNS |
 | *Fox* | 狐 | index + middle · other hand index + pinky | PEACE + HORNS |
+| *Fire* | 火 | three fingers up · other hand a fist | THREE + FIST |
+| *Water* | 水 | three fingers up · other palm open | THREE + OPEN |
+| *Thunder* | 雷 | three fingers up · other hand index only | THREE + INDEX |
+| *Earth* | 土 | two fists, one held **above** the other | FIST + FIST, stacked |
+| *Moon* | 月 | three fingers · other hand index + middle | THREE + PEACE |
+| *Star* | 星 | three fingers · other hand index + pinky | THREE + HORNS |
+| *Mountain* | 山 | both hands three fingers up, together | THREE + THREE, together |
+| *Shield* | 盾 | both palms open, one held **above** the other | OPEN + OPEN, stacked |
 
-The four special seals (italic) aren't zodiac seals; the game uses them for Rasengan, Kirin and Rasenshuriken.
+The twelve special seals (italic) aren't zodiac seals. Confrontation, Wind, Spirit and Fox power Rasengan, Kirin and Rasenshuriken; all 24 can be trained in the Dojo. "Three fingers" = index, middle and ring up, pinky folded. Snake now needs the fists side by side (stacked fists are Earth). A test checks that no two seals share the same rule set.
 
 ## Jutsu, effects and the three-jutsu loadout
 
@@ -96,7 +104,7 @@ Zodiac sequences come from fan seal guides for the series (sources vary on some)
 - **Story:** 13 chapters in 4 arcs (The Genin's Path, Shadow of the Akatsuki, The Fourth War, The Next Generation) with 12 opponents: the mentor, Kisame, rival Sasuke, Hidan, Itachi, Konan, Pain, Obito, Obito (Ten-Tails), Madara, Momoshiki, Kawaki and Isshiki. Each chapter has a visual-novel scene before and after the fight, a VS splash, and a mid-fight exchange: the villain taunts you at half HP and your hero answers. New jutsu unlock as you progress; progress is saved in the browser.
 - **23 battle backgrounds** (Chūnin Exam arena, Forest of Death, Hidden Rain and Sand villages, the war battlefield, Akatsuki hideout, Infinite Tsukuyomi and more), supplied by the project owner. Quick battle rotates through them.
 - **Quick battle:** every jutsu unlocked, against a random villain. Takes about 2 minutes, which makes it the best mode for a demo.
-- **Dojo (修行):** practise any of the 16 seals with no timer and no damage. Error Mode coaches you live; hold → release three times in a row to master a seal, then the dojo moves you to the next one. Mastery is saved in the browser.
+- **Dojo (修行):** practise any of the 24 seals with no timer and no damage. Error Mode coaches you live; hold → release three times in a row to master a seal, then the dojo moves you to the next one. Mastery is saved in the browser.
 - **Personal records:** the best score for quick battle and for each story chapter is saved. The result screen shows **NEW RECORD!** or your previous best.
 - **24 playable characters**, each with a perk (extra time, or a damage bonus to an element or to everything). If you fight as a villain who is also the chapter boss, you face their "Shadow".
 - **Russian / English:** the whole UI switches with the RU / EN toggle, including every Error Mode correction ("Выпрями средние пальцы на обеих руках."). The language is detected automatically and remembered.
@@ -192,7 +200,7 @@ npm run dev        # http://localhost:3000
 Other commands:
 
 ```bash
-npm test           # 52 tests: features, all 16 seals, smoothing, every correction path, loadout + effects, story + quick flow, defeat, dojo, AI sensei
+npm test           # 52 tests: features, all 24 seals, smoothing, every correction path, loadout + effects, story + quick flow, defeat, dojo, AI sensei
 npm run typecheck
 npm run build && npm start
 ```

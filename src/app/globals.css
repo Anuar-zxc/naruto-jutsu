@@ -3278,3 +3278,7 @@ body::after {
 .round-banner { display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .ts-kanji, .ls-kanji { white-space: nowrap; }
 .ts-kanji { font-size: 20px; }
+.dojo-board { grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.dojo-board .dc-name { font-size: 10px; }
+.dojo-board { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.dojo-board .dc-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
