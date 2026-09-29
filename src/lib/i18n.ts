@@ -88,6 +88,8 @@ export const STR = {
   mute: { ru: "Выключить звук (M)", en: "Mute (M)" },
   unmute: { ru: "Включить звук (M)", en: "Unmute (M)" },
   musicTitle: { ru: "Музыка вкл/выкл", en: "Music on/off" },
+  musicOn: { ru: "♪ Музыка включена", en: "♪ Music on" },
+  musicOff: { ru: "♪ Музыка выключена — нажми ♪, чтобы вернуть", en: "♪ Music off — press ♪ to bring it back" },
   detected: { ru: "РАСПОЗНАНО", en: "DETECTED" },
   noHands: { ru: "НЕТ РУК", en: "NO HANDS" },
   noSeal: { ru: "НЕТ ПЕЧАТИ", en: "NO SEAL" },

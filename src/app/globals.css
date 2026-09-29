@@ -3282,3 +3282,12 @@ body::after {
 .dojo-board .dc-name { font-size: 10px; }
 .dojo-board { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .dojo-board .dc-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.icon-btn.off { position: relative; text-decoration: none; opacity: 0.55; }
+.icon-btn.off::after { content: ""; position: absolute; left: 22%; right: 22%; top: 50%; height: 2px; background: var(--red); transform: rotate(-35deg); border-radius: 2px; }
+.audio-toast {
+  position: fixed; top: 84px; right: 20px; z-index: 90; pointer-events: none;
+  padding: 8px 14px; border-radius: 10px; font-weight: 800; font-size: 14px;
+  background: rgba(10, 8, 14, 0.9); border: 1px solid var(--gold); color: var(--gold);
+  animation: toast 2.4s ease-out forwards;
+}
+@keyframes toast { 0% { opacity: 0; transform: translateY(-8px); } 10%, 80% { opacity: 1; transform: none; } 100% { opacity: 0; } }

@@ -37,7 +37,8 @@ import { enraged } from "@/lib/game/gameState";
 import { askSensei, tauntRequest } from "@/lib/ai/sensei";
 
 const LS_MUTE = "shinobi.muted";
-const LS_MUSIC = "shinobi.music";
+// v2: music defaults back ON after the soundtrack update, even if it was switched off before.
+const LS_MUSIC = "shinobi.music.v2";
 
 function readMusic() {
   try {
@@ -84,6 +85,7 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
   const [mistakePop, setMistakePop] = useState<{ text: string; key: number } | null>(null);
   const [reply, setReply] = useState<string | null>(null);
   const [vs, setVs] = useState<number | null>(null);
+  const [audioToast, setAudioToast] = useState<{ text: string; key: number } | null>(null);
 
   // --- setup ------------------------------------------------------------------
   useEffect(() => {
@@ -133,6 +135,7 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
   const toggleMusic = useCallback(() => {
     setMusicOn((on) => {
       const n = !on;
+      setAudioToast({ text: t(n ? "musicOn" : "musicOff"), key: Date.now() });
       session.music.unlock();
       session.music.setEnabled(n && !muted);
       try {
@@ -433,6 +436,11 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
       {g.phase === "DEFEAT" && showResult && <DefeatPanel onExit={quit} />}
       {g.phase === "DEFEAT" && <div className="defeat-vignette" aria-hidden />}
 
+      {audioToast && (
+        <div className="audio-toast" key={audioToast.key}>
+          {audioToast.text}
+        </div>
+      )}
       <PhaseTransition phase={g.phase} />
       {flash && <div className="flash" key={flash.key} style={{ background: flash.color }} />}
       <canvas ref={fxCanvas} className="fx-canvas" aria-hidden />
