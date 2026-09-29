@@ -176,7 +176,7 @@ async function main() {
     assert.equal(trackFor("CHARACTER_SELECT", 1000, 1000), "menu");
     assert.equal(trackFor("DIALOGUE", 1000, 1000), "dialogue");
     assert.equal(trackFor("PLAYING", 900, 1000), "battle");
-    assert.equal(trackFor("PLAYING", 300, 1000), "boss");
+    assert.equal(trackFor("PLAYING", 300, 1000), "battle", "no mid-fight track switch");
     assert.equal(trackFor("VICTORY", 0, 1000), "victory");
   });
 

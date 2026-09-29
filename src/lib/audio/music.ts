@@ -347,7 +347,10 @@ export function trackFor(phase: string, bossHp: number, bossMaxHp: number): Trac
   if (phase === "DEFEAT") return null; // the defeat sting plays alone
   if (phase === "DIALOGUE" || phase === "TRAINING") return "dialogue";
   if (["COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED", "JUTSU_SELECTION"].includes(phase)) {
-    return bossHp <= bossMaxHp * 0.35 ? "boss" : "battle";
+    // One track for the whole fight: no switch (and restart) when the enemy is low.
+    void bossHp;
+    void bossMaxHp;
+    return "battle";
   }
   return "menu";
 }
