@@ -27,7 +27,7 @@ export function GameHUD({ muted, onToggleMute, musicOn, onToggleMusic, debug, on
     <header className="hud">
       <button className="hud-logo" onClick={onQuit} title={t("backTitle")}>
         <span className="logo-kanji">忍術</span>
-        <span className="logo-text">SHINOBI</span>
+        <span className="logo-text">NARUTO</span>
       </button>
       {hero && (
         <div className="hud-hero" style={{ ["--hero" as string]: hero.color }} title={tr(hero.perk)}>

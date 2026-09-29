@@ -58,7 +58,7 @@ export const STR = {
     ru: "Работает прямо в браузере · видео не покидает устройство · лучше всего с веб-камерой ноутбука и хорошим светом",
     en: "Runs entirely in your browser · camera frames never leave your device · best with a laptop webcam and good light",
   },
-  twelveSeals: { ru: "12 ПЕЧАТЕЙ ЗОДИАКА", en: "THE 12 ZODIAC SEALS" },
+  twelveSeals: { ru: "ВСЕ ПЕЧАТИ: 12 ЗОДИАКА", en: "ALL SEALS: 12 ZODIAC" },
 
   // camera
   loading: { ru: "Призываем камеру…", en: "Summoning the camera…" },
@@ -281,6 +281,10 @@ export const STR = {
     ru: "У обоих 1000 чакры. Каждая сложенная техника бьёт соперника, щиты блокируют его удары, ошибка стоит 60 чакры. Кто первый опустит чакру соперника до нуля — победил.",
     en: "Both start with 1000 chakra. Every jutsu you finish hits your opponent, shields block their hits, a mistake costs 60 chakra. Bring their chakra to zero first to win.",
   },
+  statSeals: { ru: "печати", en: "seals" },
+  statJutsu: { ru: "техник", en: "jutsu" },
+  statChapters: { ru: "глав сюжета", en: "story chapters" },
+  statOnline: { ru: "онлайн-дуэли", en: "online duels" },
 } satisfies Record<string, L>;
 
 export type StrKey = keyof typeof STR;

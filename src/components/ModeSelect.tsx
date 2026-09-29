@@ -7,6 +7,8 @@ import { t } from "@/lib/i18n";
 import { SIGN_LIST } from "@/lib/vision/gestureDefinitions";
 import { useEffect, useState } from "react";
 import type { GameMode } from "@/types/game";
+import { CHARACTERS, type CharacterId } from "@/lib/game/characters";
+import { Portrait } from "./Portrait";
 
 export function ModeSelect() {
   useLang();
@@ -28,6 +30,19 @@ export function ModeSelect() {
     session.sfx.select();
     session.dispatch({ type: "SELECT_MODE", mode });
   };
+  const openShop = () => {
+    session.sfx.unlock();
+    session.sfx.select();
+    session.dispatch({ type: "OPEN_SHOP" });
+  };
+  const bg = (f: string) => `/assets/backgrounds/${f}.webp`;
+  const cards: { id: string; cls: string; kanji: string; title: string; desc: string; meta?: string; bg: string; hero: CharacterId; accent: string; onClick: () => void }[] = [
+    { id: "story", cls: "story", kanji: "物語", title: t("storyTitle"), desc: t("storyDesc"), bg: bg("valley"), hero: "naruto-six-paths", accent: "#e63946", onClick: () => pick("story") },
+    { id: "quick", cls: "quick", kanji: "決闘", title: t("quickTitle"), desc: t("quickDesc"), meta: best != null ? t("bestScore", { n: best.toLocaleString("en-US") }) : undefined, bg: bg("war"), hero: "sasuke", accent: "#2ec5ff", onClick: () => pick("quick") },
+    { id: "duel", cls: "duel", kanji: "対戦", title: t("duelTitle"), desc: t("duelDesc"), bg: bg("arena"), hero: "itachi", accent: "#9d4eff", onClick: () => pick("duel") },
+    { id: "training", cls: "dojo", kanji: "修行", title: t("dojoTitle"), desc: t("dojoDesc"), meta: t("dojoMastered", { m: mastered, n: SIGN_LIST.length }), bg: bg("canyon"), hero: "kakashi", accent: "#ffc15e", onClick: () => pick("training") },
+    { id: "shop", cls: "shop-card-mode", kanji: "店", title: t("shopTitle"), desc: t("shopDesc"), meta: `両 ${profile.ryo.toLocaleString("en-US")} ${t("ryo")}`, bg: bg("villagenight"), hero: "jiraiya", accent: "#5dffc1", onClick: openShop },
+  ];
   return (
     <div className="select-overlay">
       <div className="select-title">{t("chooseMode")}</div>
@@ -36,43 +51,26 @@ export function ModeSelect() {
         <span className="purse-coin">両</span>
         <em>{profile.ryo.toLocaleString("en-US")}</em>
       </button>
-      <div className="mode-cards">
-        <button className="mode-card story" onClick={() => pick("story")} data-mode="story">
-          <div className="mode-kanji">物語</div>
-          <div className="mode-title">{t("storyTitle")}</div>
-          <div className="mode-desc">{t("storyDesc")}</div>
-        </button>
-        <button className="mode-card quick" onClick={() => pick("quick")} data-mode="quick">
-          <div className="mode-kanji">決闘</div>
-          <div className="mode-title">{t("quickTitle")}</div>
-          <div className="mode-desc">{t("quickDesc")}</div>
-          {best != null && <div className="mode-meta">{t("bestScore", { n: best.toLocaleString("en-US") })}</div>}
-        </button>
-        <button className="mode-card dojo" onClick={() => pick("training")} data-mode="training">
-          <div className="mode-kanji">修行</div>
-          <div className="mode-title">{t("dojoTitle")}</div>
-          <div className="mode-desc">{t("dojoDesc")}</div>
-          <div className="mode-meta">{t("dojoMastered", { m: mastered, n: SIGN_LIST.length })}</div>
-        </button>
-        <button className="mode-card duel" onClick={() => pick("duel")} data-mode="duel">
-          <div className="mode-kanji">対戦</div>
-          <div className="mode-title">{t("duelTitle")}</div>
-          <div className="mode-desc">{t("duelDesc")}</div>
-        </button>
-        <button
-          className="mode-card shop-card-mode"
-          onClick={() => {
-            session.sfx.unlock();
-            session.sfx.select();
-            session.dispatch({ type: "OPEN_SHOP" });
-          }}
-          data-mode="shop"
-        >
-          <div className="mode-kanji">店</div>
-          <div className="mode-title">{t("shopTitle")}</div>
-          <div className="mode-desc">{t("shopDesc")}</div>
-          <div className="mode-meta">両 {profile.ryo.toLocaleString("en-US")} {t("ryo")}</div>
-        </button>
+      <div className="mode-cards posters">
+        {cards.map((c, i) => (
+          <button
+            key={c.id}
+            className={`mode-card poster ${c.cls}`}
+            onClick={c.onClick}
+            data-mode={c.id}
+            style={{ animationDelay: `${i * 0.07}s`, ["--accent" as string]: c.accent }}
+          >
+            <div className="mc-bg" style={{ backgroundImage: `url(${c.bg})` }} />
+            <div className="mc-shade" />
+            <Portrait ch={CHARACTERS[c.hero]} className="mc-hero" />
+            <div className="mc-body">
+              <div className="mode-kanji">{c.kanji}</div>
+              <div className="mode-title">{c.title}</div>
+              <div className="mode-desc">{c.desc}</div>
+              {c.meta && <div className="mode-meta">{c.meta}</div>}
+            </div>
+          </button>
+        ))}
       </div>
     </div>
   );

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SIGN_LIST } from "@/lib/vision/gestureDefinitions";
-import { PLAYABLE } from "@/lib/game/characters";
-import { t, tr } from "@/lib/i18n";
+import { CHARACTERS } from "@/lib/game/characters";
+import { useProfile } from "@/hooks/useProfile";
+import { t, tr, type StrKey } from "@/lib/i18n";
 import { useLang } from "@/hooks/useLang";
 import { HandPictogram } from "./HandPictogram";
 import { LangToggle } from "./LangToggle";
@@ -11,6 +12,10 @@ import { Portrait } from "./Portrait";
 
 export function StartScreen({ onStart }: { onStart: () => void }) {
   useLang();
+  const profile = useProfile();
+  const [showSeals, setShowSeals] = useState(false);
+  const artRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Enter") onStart();
@@ -19,54 +24,124 @@ export function StartScreen({ onStart }: { onStart: () => void }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onStart]);
 
-  const roster = PLAYABLE.filter((_, i) => i % 2 === 0).slice(0, 10);
+  // Gentle mouse parallax on the key art.
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const onMove = (e: PointerEvent) => {
+      const el = artRef.current;
+      if (!el) return;
+      const x = e.clientX / window.innerWidth - 0.5;
+      const y = e.clientY / window.innerHeight - 0.5;
+      el.style.setProperty("--px", x.toFixed(3));
+      el.style.setProperty("--py", y.toFixed(3));
+    };
+    window.addEventListener("pointermove", onMove);
+    return () => window.removeEventListener("pointermove", onMove);
+  }, []);
+
+  const trio = (["sasuke", "naruto", "kakashi"] as const).map((id) => CHARACTERS[id]);
+  const stats: [string, StrKey][] = [
+    ["24", "statSeals"],
+    ["12", "statJutsu"],
+    ["13", "statChapters"],
+    ["1v1", "statOnline"],
+  ];
 
   return (
-    <main className="start">
-      <Embers />
+    <main className="start v10">
       <div className="start-bg" />
+      <div className="start-moon" aria-hidden />
+      <div className="start-fog" aria-hidden />
+      <Embers />
+      <Leaves />
       <div className="start-watermark">忍術</div>
-      <div className="start-enso" aria-hidden />
-      <div className="start-roster" aria-hidden>
-        {roster.map((c) => (
-          <Portrait key={c.id} ch={c} className="roster-img" />
-        ))}
-      </div>
       <LangToggle className="start-lang" />
-      <div className="start-inner">
-        <div className="start-eyebrow">{t("eyebrow")}</div>
-        <h1 className="start-title">
-          SHINOBI<span>— JUTSU —</span>
-        </h1>
-        <p className="start-tagline">{t("tagline")}</p>
-        <button className="btn primary cta" onClick={onStart} autoFocus>
-          {t("cta")}
-        </button>
-        <ol className="start-steps">
-          <li>
-            <b>1</b> {t("step1")}
-          </li>
-          <li>
-            <b>2</b> {t("step2")}
-          </li>
-          <li>
-            <b>3</b> {t("step3")}
-          </li>
-        </ol>
-        <div className="gallery-title">{t("twelveSeals")} <em className="gallery-plus">{t("specialSeals")}</em></div>
-        <div className="seal-gallery">
-          {SIGN_LIST.map((s) => (
-            <div key={s.id} className="gallery-item" title={tr(s.howTo)}>
-              <HandPictogram def={s} size={58} />
-              <span>
-                {s.kanji} {tr(s.name).toUpperCase()}
-              </span>
+
+      <section className="hero">
+        <div className="hero-copy">
+          <div className="start-eyebrow">{t("eyebrow")}</div>
+          <h1 className="hero-title">
+            <span className="ht-top">NARUTO</span>
+            <span className="ht-bottom">
+              <i>忍術</i> JUTSU
+            </span>
+          </h1>
+          <p className="start-tagline">{t("tagline")}</p>
+
+          <div className="hero-cta">
+            <button className="btn primary cta shine" onClick={onStart} autoFocus data-action="start">
+              <span>{t("cta")}</span>
+              <kbd>Enter</kbd>
+            </button>
+            <div className="hero-player">
+              <b>{profile.nick}</b>
+              <span className="purse-coin">両</span>
+              <em>{profile.ryo.toLocaleString("en-US")}</em>
             </div>
-          ))}
+          </div>
+
+          <div className="hero-stats">
+            {stats.map(([n, k], i) => (
+              <div key={k} className="hs" style={{ animationDelay: `${0.5 + i * 0.08}s` }}>
+                <b>{n}</b>
+                <span>{t(k)}</span>
+              </div>
+            ))}
+          </div>
+
+          <ol className="start-steps">
+            <li>
+              <b>1</b> {t("step1")}
+            </li>
+            <li>
+              <b>2</b> {t("step2")}
+            </li>
+            <li>
+              <b>3</b> {t("step3")}
+            </li>
+          </ol>
         </div>
+
+        <div className="hero-art" ref={artRef} aria-hidden>
+          <div className="ha-ring" />
+          {trio.map((c, i) => (
+            <Portrait key={c.id} ch={c} className={`ha-img ha-${i}`} />
+          ))}
+          <div className="ha-kanji">火</div>
+        </div>
+      </section>
+
+      <section className="seal-section">
+        <button className="gallery-title" onClick={() => setShowSeals((v) => !v)} aria-expanded={showSeals}>
+          {t("twelveSeals")} <em className="gallery-plus">{t("specialSeals")}</em>
+          <span className="gallery-toggle">{showSeals ? "▲" : "▼"}</span>
+        </button>
+        {showSeals && (
+          <div className="seal-gallery">
+            {SIGN_LIST.map((s, i) => (
+              <div key={s.id} className="gallery-item" title={tr(s.howTo)} style={{ animationDelay: `${i * 0.02}s` }}>
+                <HandPictogram def={s} size={54} />
+                <span>
+                  {s.kanji} {tr(s.name).toUpperCase()}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
         <p className="start-foot">{t("foot")}</p>
-      </div>
+      </section>
     </main>
+  );
+}
+
+/** Drifting leaves (Hidden Leaf!) over the title screen. */
+function Leaves() {
+  return (
+    <div className="leaves" aria-hidden>
+      {Array.from({ length: 14 }, (_, i) => (
+        <i key={i} style={{ left: `${(i * 7.3 + 3) % 100}%`, animationDelay: `${(i * 1.7) % 12}s`, animationDuration: `${10 + (i % 5) * 2.5}s` }} />
+      ))}
+    </div>
   );
 }
 

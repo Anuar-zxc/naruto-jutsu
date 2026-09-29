@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SHINOBI — JUTSU · Your hands are the controller",
+  title: "NARUTO JUTSU · Hand seals are the controller",
   description: "A browser game where you cast jutsu by performing ninja hand seals in front of your webcam. Real-time hand tracking, custom gesture recognition and an error mode that tells you exactly what to fix.",
 };
 
@@ -12,10 +12,12 @@ export const viewport: Viewport = {
   themeColor: "#07060a",
 };
 
+import { KANJI } from "./kanji";
+
+// Display + UI fonts with full Cyrillic support (the game is Russian-first).
 const FONTS =
-  "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@500;600;700&display=swap";
-// Kanji font is subset to exactly the glyphs the game uses (a few KB instead of MBs).
-const KANJI = "忍術寅未巳午辰申丑酉火水雷遁影鬼失";
+  "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@500;600;700&family=Exo+2:ital,wght@0,500;0,600;0,700;0,800;1,700&display=swap";
+// Kanji font is subset to exactly the glyphs the game uses (see scripts/kanji.mjs).
 const KANJI_FONT = `https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@900&display=swap&text=${encodeURIComponent(KANJI)}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
