@@ -4,7 +4,7 @@
  * REAL recognizer.
  */
 import assert from "node:assert/strict";
-import { MISTAKE_TIME_MS, PLAYER_MAX_HP, RETALIATION, TRAIN_MASTERY, availableJutsu, dialogueLines, enemyAttack, enraged, gameReducer, initialGameState, mistakeCost, timeLimit } from "../src/lib/game/gameState";
+import { DUEL_HP, MISTAKE_TIME_MS, PLAYER_MAX_HP, RETALIATION, TRAIN_MASTERY, availableJutsu, dialogueLines, enemyAttack, enraged, gameReducer, initialGameState, mistakeCost, timeLimit } from "../src/lib/game/gameState";
 import { JUTSU, JUTSU_LIST } from "../src/lib/game/jutsu";
 import { rankFor, accuracy } from "../src/lib/game/scoring";
 import { comboMultiplier } from "../src/lib/game/combo";
@@ -16,6 +16,7 @@ import { GestureRecognizer } from "../src/lib/vision/gestureRecognizer";
 import { SIGNS } from "../src/lib/vision/gestureDefinitions";
 import { poseForSign, syntheticFrame } from "../src/lib/vision/syntheticHand";
 import { setLang } from "../src/lib/i18n";
+import { UPGRADES, buy, defaultProfile, noUpgrades, reward, sanitizeProfile, cleanNick } from "../src/lib/game/profile";
 import { trackFor } from "../src/lib/audio/music";
 import type { GameAction, GameState, JutsuId } from "../src/types/game";
 import type { SignId } from "../src/types/gestures";
@@ -277,6 +278,119 @@ async function main() {
     const at = (ch: number) => enemyAttack({ ...initialGameState(), mode: "story", chapter: ch });
     assert.ok(at(0) < at(CHAPTERS.length - 1));
     assert.ok(Math.ceil(PLAYER_MAX_HP / at(CHAPTERS.length - 1)) >= 3, "at least 3 failures allowed even in the finale");
+  });
+
+  await test("profile: nick cleanup, prices, buying, rewards, tamper-proof loading", () => {
+    assert.equal(cleanNick("  <b>Sasuke</b>   Uchiha forever and ever "), "bSasuke/b Uchiha");
+    let p = { ...defaultProfile(), ryo: 400 };
+    p = buy(p, "chakra")!;
+    assert.equal(p.upgrades.chakra, 1);
+    assert.equal(p.ryo, 250);
+    assert.equal(buy({ ...p, ryo: 10 }, "guard"), null, "not enough ryō");
+    const maxed = { ...p, ryo: 99999, upgrades: { ...p.upgrades, speed: 3 } };
+    assert.equal(buy(maxed, "speed"), null, "maxed");
+    assert.ok(reward({ win: true, rank: "S", mode: "duel", chapter: null, perfect: 2 }) > reward({ win: true, rank: "C", mode: "quick", chapter: null, perfect: 0 }));
+    assert.equal(reward({ win: false, rank: "C", mode: "quick", chapter: null, perfect: 0 }), 25);
+    const bad = sanitizeProfile({ nick: 5, ryo: -9, upgrades: { chakra: 99, power: "x" } });
+    assert.equal(bad.ryo, 0);
+    assert.equal(bad.upgrades.chakra, UPGRADES.find((u) => u.id === "chakra")!.max);
+    assert.equal(bad.upgrades.power, 0);
+  });
+
+  await test("upgrades change combat: chakra, power, speed, focus, guard", () => {
+    const up = { ...noUpgrades(), chakra: 2, power: 3, speed: 2, focus: 2, guard: 1 };
+    const base = quick();
+    const s0 = reduce(menu(), { type: "SET_UPGRADES", upgrades: up }, { type: "SELECT_MODE", mode: "quick" }, { type: "SELECT_CHARACTER", id: "hashirama", bossId: "pain" });
+    assert.equal(s0.playerMaxHp, 120);
+    assert.equal(s0.status.shield, 1, "guard: starts with a shield");
+    assert.equal(timeLimit(s0, 10000), timeLimit(base, 10000) + 2000);
+    let a = cast(base, "RASENGAN");
+    let b = cast(s0, "RASENGAN");
+    assert.equal(b.lastCast!.damage, Math.round(a.lastCast!.damage * 1.24));
+    assert.equal(mistakeCost(s0), Math.round(mistakeCost(base) * 0.7));
+  });
+
+  await test("duel reducer: lobby → opponent → loadout waits → begin → remote hits, shields, KO", () => {
+    let s = reduce(menu(), { type: "SELECT_MODE", mode: "duel" }, { type: "SELECT_CHARACTER", id: "naruto" });
+    assert.equal(s.phase, "LOBBY");
+    s = reduce(s, { type: "DUEL_OPPONENT", nick: "Rival", heroId: "sasuke" });
+    assert.equal(s.phase, "JUTSU_SELECTION");
+    assert.equal(s.bossId, "sasuke");
+    assert.equal(s.playerMaxHp, DUEL_HP);
+    s = reduce(s, { type: "TOGGLE_LOADOUT", id: "KAWARIMI" }, { type: "TOGGLE_LOADOUT", id: "CHIDORI" }, { type: "TOGGLE_LOADOUT", id: "RASENGAN" }, { type: "CONFIRM_LOADOUT" });
+    assert.equal(s.phase, "JUTSU_SELECTION", "waits for the opponent");
+    assert.equal(s.duel?.ready, true);
+    s = reduce(s, { type: "DUEL_BEGIN" });
+    assert.equal(s.phase, "COUNTDOWN");
+    s = reduce(s, { type: "REMOTE_HP", hp: 700, max: 1000 });
+    assert.equal(s.bossHp, 700);
+    s = reduce(s, { type: "REMOTE_HIT", amount: 250 });
+    assert.equal(s.playerHp, 750);
+    s = cast(s, "KAWARIMI");
+    s = reduce(s, { type: "REMOTE_HIT", amount: 400 });
+    assert.equal(s.playerHp, 750, "shield blocks a remote hit");
+    s = reduce(s, { type: "CAST_DONE" });
+    assert.equal(s.phase, "NEXT_ROUND", "no AI retaliation in a duel");
+    assert.equal(s.lastRound?.retaliation, 0);
+    s = reduce(s, { type: "NEXT_ROUND_DONE" }, ...go, { type: "TICK", dt: 60000 });
+    assert.equal(s.phase, "FAILED");
+    assert.equal(s.playerHp, 750, "a fizzled jutsu costs no AI strike in a duel");
+    s = reduce(s, { type: "BACK_TO_SELECTION" }, { type: "REMOTE_HIT", amount: 9999 });
+    assert.equal(s.phase, "COUNTDOWN", "second Kawarimi shield absorbs it");
+    s = reduce(s, { type: "REMOTE_HIT", amount: 9999 });
+    assert.equal(s.phase, "DEFEAT");
+    const w = reduce(menu(), { type: "SELECT_MODE", mode: "duel" }, { type: "SELECT_CHARACTER", id: "naruto" }, { type: "DUEL_OPPONENT", nick: "X", heroId: "pain" }, { type: "DUEL_RESULT", win: true });
+    assert.equal(w.phase, "VICTORY");
+  });
+
+  await test("online duel end-to-end: two sessions over a local channel, hit → KO → both results + ryō", async () => {
+    Object.assign(TIMING, { countdownStep: 10, successCharge: 10, castImpact: 5, castDuration: 10, nextRound: 10 });
+    const store = new Map<string, string>();
+    (globalThis as unknown as { localStorage: unknown }).localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v), removeItem: (k: string) => store.delete(k) };
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const A = new GameSession();
+    const B = new GameSession();
+    A.forceLocalNet = B.forceLocalNet = true;
+    A.loadProfile();
+    for (const x of [A, B]) {
+      x.dispatch({ type: "START" });
+      x.dispatch({ type: "CAMERA_READY" });
+      x.dispatch({ type: "ENTER_SELECTION" });
+      x.dispatch({ type: "SELECT_MODE", mode: "duel" });
+    }
+    A.dispatch({ type: "SELECT_CHARACTER", id: "naruto" });
+    B.dispatch({ type: "SELECT_CHARACTER", id: "sasuke" });
+    await A.hostRoom();
+    const code = A.getDuel().code;
+    assert.equal(code.length, 5);
+    await B.joinRoom(code.toLowerCase());
+    await sleep(80);
+    assert.equal(A.getState().phase, "JUTSU_SELECTION");
+    assert.equal(B.getState().phase, "JUTSU_SELECTION");
+    assert.equal(A.getState().bossId, "sasuke");
+    assert.equal(B.getState().duel?.opponentNick, A.getProfile().nick);
+    for (const x of [A, B]) for (const id of ["RASENGAN", "CHIDORI", "KAWARIMI"] as JutsuId[]) x.dispatch({ type: "TOGGLE_LOADOUT", id });
+    A.dispatch({ type: "CONFIRM_LOADOUT" });
+    await sleep(40);
+    assert.equal(A.getState().phase, "JUTSU_SELECTION", "host waits");
+    B.dispatch({ type: "CONFIRM_LOADOUT" });
+    await sleep(120);
+    assert.equal(A.getState().phase, "PLAYING");
+    assert.equal(B.getState().phase, "PLAYING");
+    for (const sign of JUTSU.RASENGAN.sequence) A.dispatch({ type: "SIGN", sign });
+    await sleep(150);
+    const dmg = A.getState().lastCast!.damage;
+    assert.equal(B.getState().playerHp, DUEL_HP - dmg, "B took A's Rasengan");
+    assert.equal(A.getState().bossHp, DUEL_HP - dmg, "A sees B's real HP");
+    B.dispatch({ type: "REMOTE_HIT", amount: 5000 }); // simulate B being finished off
+    await sleep(80);
+    assert.equal(B.getState().phase, "DEFEAT");
+    assert.equal(A.getState().phase, "VICTORY");
+    assert.ok((A.lastReward ?? 0) > (B.lastReward ?? 0));
+    A.leaveRoom();
+    B.leaveRoom();
+    A.destroy();
+    B.destroy();
   });
 
   await test("dojo: training mode, streak → mastery, free seal choice, back to menu", () => {

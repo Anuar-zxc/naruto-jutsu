@@ -37,7 +37,20 @@ export function ResultScreen({ onExit }: { onExit: () => void }) {
       <div className="result-card">
         <div className="result-head">{t("victory")}</div>
         {story && <div className="result-chapter">{t("chapterN", { n: g.chapter! + 1 })} · {tr(CHAPTERS[g.chapter!].title)}</div>}
-        <div className="result-sub">{foe && hero ? t("defeatedBy", { foe: tr(foe.name), hero: tr(hero.name) }) : ""}</div>
+        <div className="result-sub">
+          {g.mode === "duel"
+            ? session.getDuel().forfeit
+              ? t("forfeit")
+              : t("duelWin", { nick: g.duel?.opponentNick ?? "?" })
+            : foe && hero
+              ? t("defeatedBy", { foe: tr(foe.name), hero: tr(hero.name) })
+              : ""}
+        </div>
+        {session.lastReward != null && (
+          <div className="reward-line" data-reward={session.lastReward}>
+            <span className="purse-coin">両</span> {t("rewardLine", { n: session.lastReward })}
+          </div>
+        )}
         <div className={`rank rank-${rank}`}>{rank}</div>
         {rec?.isNew ? (
           <div className="new-record">★ {t("newRecord")} ★</div>
@@ -60,6 +73,16 @@ export function ResultScreen({ onExit }: { onExit: () => void }) {
           {story ? (
             <button className="btn primary" onClick={() => session.dispatch({ type: "STORY_OUTRO" })} data-action="continue">
               {last ? t("theEnd") : t("continueStory")}
+            </button>
+          ) : g.mode === "duel" ? (
+            <button
+              className="btn primary"
+              onClick={() => {
+                session.leaveRoom();
+                session.dispatch({ type: "BACK_TO_MENU" });
+              }}
+            >
+              {t("toMenu")}
             </button>
           ) : (
             <button className="btn primary" onClick={() => session.dispatch({ type: "RESTART" })}>
@@ -134,19 +157,32 @@ export function DefeatPanel({ onExit }: { onExit: () => void }) {
       <div className="result-card defeat-card">
         <div className="defeat-kanji">敗</div>
         <div className="result-head">{t("defeat")}</div>
-        <div className="result-sub">{t("defeatSub", { foe: foe ? tr(foe.name) : "?" })}</div>
+        <div className="result-sub">{g.mode === "duel" ? t("duelLose", { nick: g.duel?.opponentNick ?? "?" }) : t("defeatSub", { foe: foe ? tr(foe.name) : "?" })}</div>
+        {session.lastReward != null && (
+          <div className="reward-line">
+            <span className="purse-coin">両</span> {t("rewardLine", { n: session.lastReward })}
+          </div>
+        )}
         <SenseiReview outcome="defeat" />
         <div className="defeat-tip">{t("defeatTip")}</div>
         <div className="result-actions">
-          <button className="btn primary" onClick={() => session.dispatch({ type: "RESTART" })} data-action="rematch">
-            {t("tryFightAgain")}
-          </button>
+          {g.mode !== "duel" && (
+            <button className="btn primary" onClick={() => session.dispatch({ type: "RESTART" })} data-action="rematch">
+              {t("tryFightAgain")}
+            </button>
+          )}
           {story ? (
             <button className="btn ghost" onClick={() => session.dispatch({ type: "BACK_TO_CHAPTERS" })}>
               {t("toChapters")}
             </button>
           ) : (
-            <button className="btn ghost" onClick={() => session.dispatch({ type: "BACK_TO_MENU" })}>
+            <button
+              className="btn ghost"
+              onClick={() => {
+                session.leaveRoom();
+                session.dispatch({ type: "BACK_TO_MENU" });
+              }}
+            >
               {t("toMenu")}
             </button>
           )}

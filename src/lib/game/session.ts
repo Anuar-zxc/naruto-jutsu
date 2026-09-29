@@ -21,6 +21,25 @@ import { SIGNS } from "@/lib/vision/gestureDefinitions";
 import type { GestureRecognizer } from "@/lib/vision/gestureRecognizer";
 import { getLang, t as tt, tr } from "@/lib/i18n";
 import { CHAPTERS } from "./story";
+import { DOJO_REWARD, buy, defaultProfile, randomNick, reward, sanitizeProfile, cleanNick, type Profile, type UpgradeId } from "./profile";
+import { hostLocal, hostPeer, joinLocal, joinPeer, newRoomCode, normalizeCode, type NetError, type NetMessage, type Transport } from "@/lib/net/transport";
+import type { CharacterId } from "./characters";
+import { CHARACTERS } from "./characters";
+
+const LS_PROFILE = "shinobi.profile";
+
+/** Online-duel connection state shown by the lobby. */
+export interface DuelUi {
+  status: "idle" | "hosting" | "joining" | "connected" | "error";
+  code: string;
+  error: NetError | "left" | null;
+  opponent: { nick: string; hero: CharacterId } | null;
+  opponentReady: boolean;
+  role: "host" | "guest" | null;
+  /** The opponent disconnected mid-fight (win by forfeit). */
+  forfeit: boolean;
+}
+const IDLE_DUEL: DuelUi = { status: "idle", code: "", error: null, opponent: null, opponentReady: false, role: null, forfeit: false };
 
 const LS_PROGRESS = "shinobi.progress";
 const LS_RECORDS = "shinobi.records";
@@ -166,6 +185,7 @@ export class GameSession {
     }
   }
   private recordKey(s: GameState) {
+    if (s.mode === "duel") return "duel";
     return s.mode === "story" && s.chapter != null ? `story:${s.chapter}` : "quick";
   }
   private commitRecord(s: GameState): RecordResult {
@@ -184,6 +204,182 @@ export class GameSession {
     return { key, best: prev, isNew };
   }
 
+  // --- profile: nickname, ryō, upgrades ---------------------------------------
+  private profile: Profile = defaultProfile();
+  private profileSubs = new Set<() => void>();
+  /** Ryō earned by the fight that just ended (for the result screen). */
+  lastReward: number | null = null;
+  getProfile = () => this.profile;
+  subscribeProfile = (fn: () => void) => {
+    this.profileSubs.add(fn);
+    return () => this.profileSubs.delete(fn);
+  };
+  loadProfile() {
+    let p = defaultProfile();
+    try {
+      p = sanitizeProfile(JSON.parse(localStorage.getItem(LS_PROFILE) ?? "null"));
+    } catch {
+      /* fresh profile */
+    }
+    if (!p.nick) p.nick = randomNick();
+    this.setProfile(p);
+  }
+  private setProfile(p: Profile) {
+    this.profile = p;
+    try {
+      localStorage.setItem(LS_PROFILE, JSON.stringify(p));
+    } catch {
+      /* storage unavailable */
+    }
+    this.dispatch({ type: "SET_UPGRADES", upgrades: p.upgrades });
+    this.profileSubs.forEach((f) => f());
+  }
+  setNick(raw: string) {
+    const nick = cleanNick(raw);
+    if (nick) this.setProfile({ ...this.profile, nick });
+  }
+  buyUpgrade(id: UpgradeId): boolean {
+    const next = buy(this.profile, id);
+    if (!next) return false;
+    this.setProfile(next);
+    return true;
+  }
+  addRyo(n: number) {
+    this.setProfile({ ...this.profile, ryo: this.profile.ryo + n });
+  }
+
+  // --- online duel ------------------------------------------------------------
+  private duelUi: DuelUi = IDLE_DUEL;
+  private duelSubs = new Set<() => void>();
+  private link: Transport | null = null;
+  private heartbeat: ReturnType<typeof setInterval> | null = null;
+  private lastHeard = 0;
+  private stopHosting: (() => void) | null = null;
+  getDuel = () => this.duelUi;
+  subscribeDuel = (fn: () => void) => {
+    this.duelSubs.add(fn);
+    return () => this.duelSubs.delete(fn);
+  };
+  private setDuel(p: Partial<DuelUi>) {
+    this.duelUi = { ...this.duelUi, ...p };
+    this.duelSubs.forEach((f) => f());
+  }
+  /** ?localnet=1 links two tabs of the same browser instead of going online. */
+  forceLocalNet = false;
+  private get localNet() {
+    return this.forceLocalNet || (typeof location !== "undefined" && new URLSearchParams(location.search).has("localnet"));
+  }
+  async hostRoom() {
+    this.leaveRoom();
+    const code = newRoomCode();
+    this.setDuel({ ...IDLE_DUEL, status: "hosting", code, role: "host" });
+    try {
+      const onJoin = (t: Transport) => this.attach(t);
+      this.stopHosting = this.localNet ? await hostLocal(code, onJoin) : await hostPeer(code, onJoin);
+    } catch (e) {
+      this.setDuel({ status: "error", error: ((e as Error).message as NetError) || "network" });
+    }
+  }
+  async joinRoom(raw: string) {
+    const code = normalizeCode(raw);
+    if (code.length !== 5) return this.setDuel({ status: "error", error: "not-found" });
+    this.leaveRoom();
+    this.setDuel({ ...IDLE_DUEL, status: "joining", code, role: "guest" });
+    try {
+      const t = this.localNet ? await joinLocal(code) : await joinPeer(code);
+      this.attach(t);
+    } catch (e) {
+      const m = (e as Error).message;
+      this.setDuel({ status: "error", error: m === "timeout" ? "not-found" : ((m as NetError) || "network") });
+    }
+  }
+  leaveRoom() {
+    try {
+      this.link?.send({ t: "bye" });
+    } catch {
+      /* ignore */
+    }
+    this.link?.close();
+    this.link = null;
+    if (this.heartbeat) clearInterval(this.heartbeat);
+    this.heartbeat = null;
+    this.stopHosting?.();
+    this.stopHosting = null;
+    this.duelUi = IDLE_DUEL;
+    this.duelSubs.forEach((f) => f());
+  }
+  private attach(t: Transport) {
+    this.link = t;
+    this.setDuel({ status: "connected", error: null });
+    t.onMessage((m) => {
+      this.lastHeard = Date.now();
+      this.onNet(m);
+    });
+    t.onClose(() => this.onPeerGone());
+    // Heartbeat: a friend who closed the tab or lost the connection is noticed within ~10 s.
+    this.lastHeard = Date.now();
+    if (this.heartbeat) clearInterval(this.heartbeat);
+    this.heartbeat = setInterval(() => {
+      this.send({ t: "ping" });
+      if (Date.now() - this.lastHeard > 10000) this.onPeerGone();
+    }, 2500);
+    const s = this.state;
+    t.send({ t: "hello", nick: this.profile.nick, hero: s.characterId ?? "naruto", v: 1 });
+  }
+  private send(m: NetMessage) {
+    this.link?.send(m);
+  }
+  private onPeerGone() {
+    if (!this.link) return;
+    this.link = null;
+    if (this.heartbeat) clearInterval(this.heartbeat);
+    this.heartbeat = null;
+    const ph = this.state.phase;
+    const fighting = ["JUTSU_SELECTION", "COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED"].includes(ph);
+    if (this.state.mode === "duel" && fighting) {
+      this.setDuel({ forfeit: true, status: "error", error: "left" });
+      this.dispatch({ type: "DUEL_RESULT", win: true });
+    } else {
+      this.setDuel({ status: "error", error: "left", opponent: null, opponentReady: false });
+    }
+  }
+  private onNet(m: NetMessage) {
+    switch (m.t) {
+      case "hello": {
+        const hero = (m.hero in CHARACTERS ? m.hero : "naruto") as CharacterId;
+        this.setDuel({ opponent: { nick: m.nick || "???", hero } });
+        if (this.state.phase === "LOBBY") this.dispatch({ type: "DUEL_OPPONENT", nick: m.nick || "???", heroId: hero });
+        this.send({ t: "hp", hp: this.state.playerHp, max: this.state.playerMaxHp });
+        break;
+      }
+      case "ready":
+        this.setDuel({ opponentReady: true });
+        this.maybeGo();
+        break;
+      case "go":
+        this.dispatch({ type: "DUEL_BEGIN" });
+        break;
+      case "hit":
+        this.dispatch({ type: "REMOTE_HIT", amount: m.amount });
+        break;
+      case "hp":
+        this.dispatch({ type: "REMOTE_HP", hp: m.hp, max: m.max });
+        break;
+      case "ko":
+        this.dispatch({ type: "DUEL_RESULT", win: true });
+        break;
+      case "bye":
+        this.onPeerGone();
+        break;
+    }
+  }
+  /** Host starts the fight once both players have locked in their three jutsu. */
+  private maybeGo() {
+    if (this.duelUi.role !== "host" || !this.duelUi.opponentReady || !this.state.duel?.ready || this.state.phase !== "JUTSU_SELECTION") return;
+    this.send({ t: "go" });
+    this.dispatch({ type: "DUEL_BEGIN" });
+  }
+
   // --- dojo mastery ---------------------------------------------------------
   private dojoMastered: SignId[] = [];
   getDojoMastered = () => this.dojoMastered;
@@ -196,6 +392,8 @@ export class GameSession {
     }
   }
   private saveDojo(list: SignId[]) {
+    const fresh = list.filter((x) => !this.dojoMastered.includes(x)).length;
+    if (fresh) this.addRyo(fresh * DOJO_REWARD);
     this.dojoMastered = Array.from(new Set([...this.dojoMastered, ...list]));
     try {
       localStorage.setItem(LS_DOJO, JSON.stringify(this.dojoMastered));
@@ -238,6 +436,7 @@ export class GameSession {
         });
       } else this.sfx.confirm(tr0.streak - 1);
     }
+    if (next.mode === "duel" && this.link) this.duelSync(prev, next, a);
     if (a.type === "SELECT_SLOT") {
       this.sfx.select();
       this.recognizer?.reset();
@@ -258,6 +457,19 @@ export class GameSession {
     if (next.phase !== prev.phase) this.enterPhase(next.phase, prev.phase);
     this.stateSubs.forEach((f) => f());
   };
+
+  /** Mirror local duel events to the other player. */
+  private duelSync(prev: GameState, next: GameState, a: GameAction) {
+    if (next.phase === "JUTSU_CAST" && prev.phase !== "JUTSU_CAST" && next.lastCast) this.send({ t: "hit", amount: next.lastCast.damage, jutsu: next.lastCast.jutsuId });
+    if (a.type === "CAST_DONE" && next.lastRound && next.lastRound.burn + next.lastRound.summon > 0) this.send({ t: "hit", amount: next.lastRound.burn + next.lastRound.summon });
+    if (next.playerHp !== prev.playerHp || next.playerMaxHp !== prev.playerMaxHp) this.send({ t: "hp", hp: next.playerHp, max: next.playerMaxHp });
+    if (next.phase === "DEFEAT" && prev.phase !== "DEFEAT" && a.type !== "DUEL_RESULT") this.send({ t: "ko" });
+    if (a.type === "CONFIRM_LOADOUT" && next.duel?.ready && !prev.duel?.ready) {
+      this.send({ t: "ready" });
+      this.maybeGo();
+    }
+    if (a.type === "DUEL_OPPONENT") this.send({ t: "hp", hp: next.playerHp, max: next.playerMaxHp });
+  }
 
   private schedule(ms: number, fn: () => void) {
     this.phaseTimers.push(setTimeout(fn, ms));
@@ -313,12 +525,19 @@ export class GameSession {
         this.schedule(TIMING.nextRound, () => this.dispatch({ type: "NEXT_ROUND_DONE" }));
         break;
       case "FAILED":
+        if (this.state.mode === "duel") {
+          // No pause in a duel: the jutsu fizzles and the next one comes up.
+          this.sfx.fail();
+          this.schedule(1300, () => this.dispatch({ type: "BACK_TO_SELECTION" }));
+          break;
+        }
         this.sfx.enemyStrike();
         this.schedule(450, () => this.sfx.fail());
         break;
       case "DEFEAT":
         this.sfx.enemyStrike();
         this.schedule(500, () => this.sfx.defeat());
+        this.payout(false);
         break;
       case "TRAINING":
         this.loadDojo();
@@ -327,11 +546,21 @@ export class GameSession {
         this.lastProgressAt = performance.now();
         break;
       case "VICTORY":
+        this.payout(true);
         this.lastRecord = this.commitRecord(this.state);
         this.schedule(250, () => this.sfx.victory());
         if (this.state.mode === "story" && this.state.chapter != null) this.saveProgress(this.state.chapter + 1);
         break;
     }
+  }
+
+  private payout(win: boolean) {
+    const s = this.state;
+    if (s.mode === "training") return;
+    const n = reward({ win, rank: rankFor(s.stats), mode: s.mode, chapter: s.chapter, perfect: s.stats.perfectCount });
+    this.lastReward = n;
+    const p = this.profile;
+    this.setProfile({ ...p, ryo: p.ryo + n, wins: p.wins + (win ? 1 : 0), duelsWon: p.duelsWon + (win && s.mode === "duel" ? 1 : 0) });
   }
 
   private startTicking() {
@@ -516,6 +745,7 @@ export class GameSession {
   }
 
   destroy() {
+    this.leaveRoom();
     this.phaseTimers.forEach(clearTimeout);
     this.stopTicking();
     this.stateSubs.clear();

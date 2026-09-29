@@ -12,6 +12,7 @@ import { SIGNS } from "@/lib/vision/gestureDefinitions";
 import { t, tr } from "@/lib/i18n";
 import type { JutsuId } from "@/types/game";
 import { Portrait } from "./Portrait";
+import { useDuel } from "@/hooks/useProfile";
 
 /**
  * Loadout screen — shown ONCE at the start of a fight. The player picks three
@@ -26,6 +27,9 @@ export function JutsuSelect() {
   const available = availableJutsu(g);
   const fresh = g.mode === "story" && g.chapter != null ? CHAPTERS[g.chapter].unlocks : [];
   const list = JUTSU_ORDER.filter((id) => available.includes(id));
+  const duelUi = useDuel();
+  const duel = g.mode === "duel";
+  const waiting = duel && !!g.duel?.ready;
   const need = loadoutSize(g);
   const ready = g.loadout.length === need;
 
@@ -35,7 +39,7 @@ export function JutsuSelect() {
     session.dispatch({ type: "TOGGLE_LOADOUT", id });
   };
   const confirm = () => {
-    if (!ready) return;
+    if (!ready || waiting) return;
     session.sfx.detected();
     session.dispatch({ type: "CONFIRM_LOADOUT" });
   };
@@ -59,7 +63,7 @@ export function JutsuSelect() {
             <Portrait ch={hero} className="vs-img" />
             <b>{tr(hero.name).toUpperCase()}</b>
             <em>{t("vs")}</em>
-            <b>{tr(foe.name).toUpperCase()}</b>
+            <b>{duel && g.duel ? g.duel.opponentNick.toUpperCase() : tr(foe.name).toUpperCase()}</b>
             <Portrait ch={foe} className="vs-img" />
           </div>
         )}
@@ -84,9 +88,10 @@ export function JutsuSelect() {
             </button>
           );
         })}
-        <button className="btn primary loadout-go" onClick={confirm} disabled={!ready} data-action="to-battle">
-          {t("toBattle")}
+        <button className="btn primary loadout-go" onClick={confirm} disabled={!ready || waiting} data-action="to-battle">
+          {waiting ? t("waitingOpponent") : t("toBattle")}
         </button>
+        {duel && <span className={`duel-status ${duelUi.opponentReady ? "ok" : ""}`}>{duelUi.opponentReady ? `✓ ${t("opponentReady")}` : `… ${t("opponentPicking")}`}</span>}
       </div>
 
       <div className={`select-cards n${Math.min(list.length, 12)}`}>
@@ -137,7 +142,17 @@ export function JutsuSelect() {
       </div>
       <div className="select-tip">{t("loadoutTip")}</div>
       <div className="chapter-actions">
-        {g.mode === "story" ? (
+        {duel ? (
+          <button
+            className="btn ghost small"
+            onClick={() => {
+              session.leaveRoom();
+              session.dispatch({ type: "BACK_TO_MENU" });
+            }}
+          >
+            {t("back")}
+          </button>
+        ) : g.mode === "story" ? (
           <button className="btn ghost small" onClick={() => session.dispatch({ type: "BACK_TO_CHAPTERS" })}>
             ← {t("chapters")}
           </button>

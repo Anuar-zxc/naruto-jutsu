@@ -1,6 +1,7 @@
 import type { SignId } from "./gestures";
 import type { CharacterId } from "@/lib/game/characters";
 import type { L } from "./i18n";
+import type { Upgrades } from "@/lib/game/profile";
 
 export type Phase =
   | "IDLE"
@@ -19,6 +20,8 @@ export type Phase =
   | "FAILED"
   | "DEFEAT"
   | "TRAINING"
+  | "SHOP"
+  | "LOBBY"
   | "VICTORY";
 
 export type Element = "fire" | "water" | "lightning" | "chakra" | "wind";
@@ -58,7 +61,7 @@ export interface RoundReport {
   healed: number;
   id: number;
 }
-export type GameMode = "story" | "quick" | "training";
+export type GameMode = "story" | "quick" | "training" | "duel";
 
 export interface Jutsu {
   id: JutsuId;
@@ -120,6 +123,10 @@ export interface GameState {
   playerMaxHp: number;
   /** Damage of the last enemy counter-attack (for the UI). */
   lastEnemyHit: { amount: number; id: number } | null;
+  /** Permanent upgrades bought with ryō (from the profile). */
+  upgrades: Upgrades;
+  /** Online duel: room + opponent. */
+  duel: { opponentNick: string; ready: boolean } | null;
   /** The three jutsu chosen for this fight, and which one is up. */
   loadout: JutsuId[];
   slot: number;
@@ -157,6 +164,14 @@ export type GameAction =
   | { type: "CHANGE_CHARACTER" }
   | { type: "SELECT_JUTSU"; id: JutsuId }
   | { type: "TOGGLE_LOADOUT"; id: JutsuId }
+  | { type: "SET_UPGRADES"; upgrades: Upgrades }
+  | { type: "OPEN_SHOP" }
+  | { type: "CLOSE_SHOP" }
+  | { type: "DUEL_OPPONENT"; nick: string; heroId: CharacterId }
+  | { type: "DUEL_BEGIN" }
+  | { type: "REMOTE_HIT"; amount: number }
+  | { type: "REMOTE_HP"; hp: number; max: number }
+  | { type: "DUEL_RESULT"; win: boolean }
   | { type: "CONFIRM_LOADOUT" }
   | { type: "SELECT_SLOT"; slot: number }
   | { type: "COUNTDOWN_TICK" }

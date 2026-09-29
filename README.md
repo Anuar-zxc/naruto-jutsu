@@ -105,6 +105,8 @@ Zodiac sequences come from fan seal guides for the series (sources vary on some)
 - **23 battle backgrounds** (Chūnin Exam arena, Forest of Death, Hidden Rain and Sand villages, the war battlefield, Akatsuki hideout, Infinite Tsukuyomi and more), supplied by the project owner. Quick battle rotates through them.
 - **Quick battle:** every jutsu unlocked, against a random villain. Takes about 2 minutes, which makes it the best mode for a demo.
 - **Dojo (修行):** practise any of the 24 seals with no timer and no damage. Error Mode coaches you live; hold → release three times in a row to master a seal, then the dojo moves you to the next one. Mastery is saved in the browser.
+- **Online duel (対戦):** play a friend over the internet with a 5-letter room code. One player creates a room and sends the code, the other types it in. Both pick a hero and three jutsu, then fight at the same time: every jutsu you finish hits your opponent, their shields block your hits, burns and summons tick, a mistake costs 60 of your 1000 chakra. The loser's client reports the KO; a friend who closes the tab loses by forfeit (heartbeat, ~10 s). Networking is peer-to-peer WebRTC via PeerJS (loaded from a CDN on demand; the public PeerJS broker only does the handshake). For a same-computer demo open two tabs with `?localnet=1`.
+- **Nickname, ryō and the shop (店):** every player has a nickname and a purse. You earn ryō from every fight (by rank, perfect jutsu and chapter), duel wins and seals mastered in the Dojo, and spend it on five permanent upgrades: Chakra Reserve (+10% max chakra), Jutsu Power (+8% damage), Quick Hands (+1 s per jutsu), Focus (−15% mistake cost) and Ancestral Guard (start fights with a shield).
 - **Personal records:** the best score for quick battle and for each story chapter is saved. The result screen shows **NEW RECORD!** or your previous best.
 - **24 playable characters**, each with a perk (extra time, or a damage bonus to an element or to everything). If you fight as a villain who is also the chapter boss, you face their "Shadow".
 - **Russian / English:** the whole UI switches with the RU / EN toggle, including every Error Mode correction ("Выпрями средние пальцы на обеих руках."). The language is detected automatically and remembered.
@@ -200,7 +202,7 @@ npm run dev        # http://localhost:3000
 Other commands:
 
 ```bash
-npm test           # 52 tests: features, all 24 seals, smoothing, every correction path, loadout + effects, story + quick flow, defeat, dojo, AI sensei
+npm test           # 57 tests: features, all 24 seals, smoothing, every correction path, loadout + effects, story + quick flow, defeat, dojo, AI sensei
 npm run typecheck
 npm run build && npm start
 ```

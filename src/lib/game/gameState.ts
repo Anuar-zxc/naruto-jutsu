@@ -17,6 +17,11 @@ import { castResult, pointsForSign } from "./scoring";
 import { CHARACTERS, bossFor, damageMultiplier, mentorFor } from "./characters";
 import { CHAPTERS, jutsuForChapter } from "./story";
 import { LOCATIONS, QUICK_ROTATION, type Location } from "./locations";
+import { focusMult, hpMult, noUpgrades, powerMult, speedBonusMs, startShields } from "./profile";
+
+/** Online duel: both players start with this much chakra (×10 the solo scale). */
+export const DUEL_HP = 1000;
+const DUEL_FIGHT: Phase[] = ["JUTSU_SELECTION", "COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED"];
 
 export const PLAYER_MAX_HP = 100;
 /** A wrong seal costs chakra AND time. */
@@ -63,6 +68,8 @@ export const initialGameState = (): GameState => ({
   status: emptyStatus(),
   lastRound: null,
   lastMistakeCost: null,
+  upgrades: noUpgrades(),
+  duel: null,
   training: null,
   jutsuId: null,
   seqIndex: 0,
@@ -77,7 +84,7 @@ export const initialGameState = (): GameState => ({
 
 const ALL_PHASES: Phase[] = [
   "CAMERA_CHECK", "READY", "MODE_SELECT", "CHARACTER_SELECT", "CHAPTER_SELECT", "DIALOGUE", "JUTSU_SELECTION",
-  "COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED", "DEFEAT", "TRAINING", "VICTORY",
+  "COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED", "DEFEAT", "TRAINING", "SHOP", "LOBBY", "VICTORY",
 ];
 
 /** Which actions are legal in which phase — anything else is ignored. */
@@ -93,7 +100,7 @@ const ALLOWED: Record<GameAction["type"], Phase[]> = {
   DIALOGUE_SKIP: ["DIALOGUE"],
   STORY_OUTRO: ["VICTORY"],
   BACK_TO_CHAPTERS: ["JUTSU_SELECTION", "VICTORY", "FAILED", "DEFEAT"],
-  BACK_TO_MENU: ["CHARACTER_SELECT", "CHAPTER_SELECT", "JUTSU_SELECTION", "VICTORY", "DEFEAT", "TRAINING"],
+  BACK_TO_MENU: ["CHARACTER_SELECT", "CHAPTER_SELECT", "JUTSU_SELECTION", "VICTORY", "DEFEAT", "TRAINING", "SHOP", "LOBBY"],
   SELECT_JUTSU: ["JUTSU_SELECTION"],
   COUNTDOWN_TICK: ["COUNTDOWN"],
   TICK: ["PLAYING"],
@@ -109,6 +116,14 @@ const ALLOWED: Record<GameAction["type"], Phase[]> = {
   SELECT_SLOT: ["COUNTDOWN", "PLAYING"],
   RESTART: ["VICTORY", "FAILED", "DEFEAT", "JUTSU_SELECTION"],
   QUIT: ALL_PHASES,
+  SET_UPGRADES: ALL_PHASES,
+  OPEN_SHOP: ["MODE_SELECT"],
+  CLOSE_SHOP: ["SHOP"],
+  DUEL_OPPONENT: ["LOBBY"],
+  DUEL_BEGIN: ["JUTSU_SELECTION"],
+  REMOTE_HIT: DUEL_FIGHT,
+  REMOTE_HP: [...DUEL_FIGHT, "LOBBY"],
+  DUEL_RESULT: [...DUEL_FIGHT, "DEFEAT", "VICTORY"],
   TRAIN_SELECT: ["TRAINING"],
   TRAIN_HIT: ["TRAINING"],
 };
@@ -120,14 +135,19 @@ export const enraged = (s: GameState) => s.bossHp > 0 && s.bossHp <= s.bossMaxHp
 /** Jutsu time limit including the hero's perk (and 15% less while the enemy rages). */
 export function timeLimit(s: GameState, base: number): number {
   const bonus = s.characterId ? CHARACTERS[s.characterId].timeBonusMs : 0;
-  return Math.max(5000, Math.round((base + bonus) * (enraged(s) ? 0.85 : 1)));
+  return Math.max(5000, Math.round((base + bonus + speedBonusMs(s.upgrades)) * (enraged(s) && s.mode !== "duel" ? 0.85 : 1)));
 }
 
 /** Chakra a wrong seal costs (grows through the story). */
 export function mistakeCost(s: GameState): number {
-  if (s.mode === "story" && s.chapter != null) return 6 + Math.round((s.chapter / Math.max(1, CHAPTERS.length - 1)) * 6);
-  return 9;
+  let base = 9;
+  if (s.mode === "story" && s.chapter != null) base = 6 + Math.round((s.chapter / Math.max(1, CHAPTERS.length - 1)) * 6);
+  if (s.mode === "duel") base = 60;
+  return Math.max(1, Math.round(base * focusMult(s.upgrades)));
 }
+
+/** Chakra numbers (heal, recoil) scale with the mode: duels run on 1000 chakra. */
+const hpScale = (s: GameState) => (s.mode === "duel" ? 10 : 1);
 
 /** How many jutsu the player picks for this fight. */
 export const loadoutSize = (s: GameState) => Math.min(LOADOUT_SIZE, availableJutsu(s).length);
@@ -170,17 +190,19 @@ export function enemyAttack(s: GameState): number {
 }
 
 function startFight(s: GameState): GameState {
+  const maxHp = Math.round((s.mode === "duel" ? DUEL_HP : PLAYER_MAX_HP) * hpMult(s.upgrades));
   return {
     ...s,
     phase: "JUTSU_SELECTION",
     round: 1,
     bossHp: s.bossMaxHp,
-    playerHp: PLAYER_MAX_HP,
-    playerMaxHp: PLAYER_MAX_HP,
+    playerHp: maxHp,
+    playerMaxHp: maxHp,
     lastEnemyHit: null,
     lastRound: null,
     lastMistakeCost: null,
-    status: emptyStatus(),
+    duel: s.duel ? { ...s.duel, ready: false } : null,
+    status: { ...emptyStatus(), shield: startShields(s.upgrades) },
     slot: 0,
     // Keep the previous picks (handy for a rematch) if they're still available.
     loadout: s.loadout.filter((id) => availableJutsu(s).includes(id)).slice(0, LOADOUT_SIZE),
@@ -210,6 +232,44 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
     case "ENTER_SELECTION":
       return { ...s, phase: "MODE_SELECT" };
 
+    case "SET_UPGRADES":
+      return { ...s, upgrades: a.upgrades };
+
+    case "OPEN_SHOP":
+      return { ...s, phase: "SHOP" };
+
+    case "CLOSE_SHOP":
+      return { ...s, phase: "MODE_SELECT" };
+
+    case "DUEL_OPPONENT":
+      if (s.mode !== "duel") return s;
+      return startFight({ ...s, bossId: a.heroId, bossHp: DUEL_HP, bossMaxHp: DUEL_HP, duel: { opponentNick: a.nick, ready: false } });
+
+    case "DUEL_BEGIN":
+      if (s.mode !== "duel" || s.loadout.length !== loadoutSize(s)) return s;
+      return startRound({ ...s, duel: s.duel ? { ...s.duel, ready: true } : s.duel }, 0);
+
+    case "REMOTE_HIT": {
+      if (s.mode !== "duel") return s;
+      const r = enemyHits(s, Math.max(0, Math.round(a.amount)));
+      return {
+        ...r.s,
+        lastEnemyHit: r.taken > 0 ? { amount: r.taken, id: s.eventId + 1 } : s.lastEnemyHit,
+        lastRound: r.blocked ? { burn: 0, summon: 0, retaliation: 0, blocked: true, staggered: false, healed: 0, id: s.eventId + 1 } : s.lastRound,
+        eventId: s.eventId + 1,
+        phase: r.s.playerHp <= 0 ? "DEFEAT" : s.phase,
+      };
+    }
+
+    case "REMOTE_HP":
+      if (s.mode !== "duel") return s;
+      return { ...s, bossHp: Math.max(0, Math.min(a.max, a.hp)), bossMaxHp: Math.max(1, a.max) };
+
+    case "DUEL_RESULT":
+      if (s.mode !== "duel") return s;
+      if (s.phase === "VICTORY" || s.phase === "DEFEAT") return s;
+      return { ...s, phase: a.win ? "VICTORY" : "DEFEAT", bossHp: a.win ? 0 : s.bossHp };
+
     case "SELECT_MODE":
       if (a.mode === "training") return { ...s, mode: "training", phase: "TRAINING", training: { sign: "RAT", streak: 0, hits: 0, mastered: [] } };
       return { ...s, mode: a.mode, phase: "CHARACTER_SELECT" };
@@ -226,6 +286,7 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
 
     case "SELECT_CHARACTER":
       if (s.mode === "story") return { ...s, characterId: a.id, phase: "CHAPTER_SELECT" };
+      if (s.mode === "duel") return { ...s, characterId: a.id, phase: "LOBBY", duel: null };
       return startFight({ ...s, characterId: a.id, bossId: a.bossId ?? bossFor(a.id), bossHp: BOSS.maxHp, bossMaxHp: BOSS.maxHp });
 
     case "CHANGE_CHARACTER":
@@ -285,6 +346,8 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
 
     case "CONFIRM_LOADOUT":
       if (s.loadout.length !== loadoutSize(s) || s.loadout.length === 0) return s;
+      // Duel: wait for the other player — the session sends DUEL_BEGIN when both are ready.
+      if (s.mode === "duel") return { ...s, duel: s.duel ? { ...s.duel, ready: true } : s.duel };
       return startRound(s, 0);
 
     case "SELECT_SLOT": {
@@ -302,6 +365,10 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
     case "TICK": {
       const timeLeftMs = s.timeLeftMs - a.dt;
       const stats = { ...s.stats, playMs: s.stats.playMs + a.dt };
+      if (timeLeftMs <= 0 && s.mode === "duel") {
+        // Duel: the jutsu fizzles — no AI strike, the other player is busy casting too.
+        return { ...s, timeLeftMs: 0, phase: "FAILED", eventId: s.eventId + 1, lastEnemyHit: null, stats: { ...stats, combo: 0, failedCount: stats.failedCount + 1 } };
+      }
       if (timeLeftMs <= 0) {
         // The enemy seizes the opening and strikes back (a shield can absorb it).
         const r = enemyHits(s, enemyAttack(s));
@@ -364,7 +431,7 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
       const perfect = s.jutsuMistakes === 0;
       const e = j.effect;
       const tags: string[] = [];
-      let mult = damageMultiplier(hero, j.element);
+      let mult = damageMultiplier(hero, j.element) * powerMult(s.upgrades);
       let status = { ...s.status };
       let playerHp = s.playerHp;
       if (status.boost > 1) {
@@ -404,11 +471,11 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
         tags.push("summon");
       }
       if (e.kind === "heal") {
-        playerHp = Math.min(s.playerMaxHp, playerHp + e.hp);
+        playerHp = Math.min(s.playerMaxHp, playerHp + e.hp * hpScale(s));
         tags.push("heal");
       }
       if (e.kind === "recoil") {
-        playerHp = Math.max(1, playerHp - e.hp); // never kills you on its own
+        playerHp = Math.max(1, playerHp - e.hp * hpScale(s)); // never kills you on its own
         tags.push("recoil");
       }
       const bossHp = Math.max(0, s.bossHp - damage);
@@ -430,7 +497,7 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
     }
 
     case "CAST_DONE": {
-      if (s.bossHp <= 0) return { ...s, phase: "VICTORY" };
+      if (s.bossHp <= 0 && s.mode !== "duel") return { ...s, phase: "VICTORY" };
       // End of round: damage over time, then the enemy answers.
       let st = s;
       let status = { ...s.status };
@@ -447,6 +514,8 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
       const bossHp = Math.max(0, s.bossHp - burn - summon);
       st = { ...st, status, bossHp, stats: { ...st.stats, totalDamage: st.stats.totalDamage + (s.bossHp - bossHp) } };
       const report = { burn, summon, retaliation: 0, blocked: false, staggered: false, healed: 0, id: s.eventId + 1 };
+      // Duel: the win is decided by the opponent's own client (it reports its KO); no AI retaliation.
+      if (s.mode === "duel") return { ...st, phase: "NEXT_ROUND", lastRound: report, eventId: s.eventId + 1 };
       if (bossHp <= 0) return { ...st, phase: "VICTORY", lastRound: report, eventId: s.eventId + 1 };
       // A perfect jutsu staggers the enemy; otherwise it retaliates.
       if (s.lastCast?.perfect) {

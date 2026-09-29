@@ -21,13 +21,15 @@ interface Props {
   defeated: boolean;
   hpDelayMs: number;
   taunt: string | null;
+  /** Online duel: show the opponent's nickname instead of the character name. */
+  nick?: string;
 }
 
-export const Boss = forwardRef<HTMLDivElement, Props>(function Boss({ bossId, heroId, location, hp, maxHp, hitKey, damage, defeated, hpDelayMs, taunt }, ref) {
+export const Boss = forwardRef<HTMLDivElement, Props>(function Boss({ bossId, heroId, location, hp, maxHp, hitKey, damage, defeated, hpDelayMs, taunt, nick }, ref) {
   useLang();
   const boss = bossId ? CHARACTERS[bossId] : null;
   const shadow = !!boss && boss.id === heroId;
-  const name = boss ? (shadow ? t("shadowOf", { name: tr(boss.name) }) : tr(boss.name)) : "???";
+  const name = nick ?? (boss ? (shadow ? t("shadowOf", { name: tr(boss.name) }) : tr(boss.name)) : "???");
   return (
     <div className="arena">
       <ArenaBackdrop location={location} showName={false} />

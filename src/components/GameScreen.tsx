@@ -31,6 +31,8 @@ import { JutsuSelect } from "./JutsuSelect";
 import { JutsuSequence } from "./JutsuSequence";
 import { DefeatPanel, FailedPanel, ResultScreen } from "./ResultScreen";
 import { Dojo } from "./Dojo";
+import { Lobby } from "./Lobby";
+import { Shop } from "./Shop";
 import { LoadoutTray } from "./LoadoutTray";
 import { tagText } from "@/lib/game/effects";
 import { enraged } from "@/lib/game/gameState";
@@ -296,6 +298,7 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
   }, [g]);
 
   const quit = () => {
+    session.leaveRoom();
     session.dispatch({ type: "QUIT" });
     onExit();
   };
@@ -368,6 +371,7 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
             defeated={g.phase === "VICTORY"}
             hpDelayMs={hpDelay}
             taunt={taunt}
+            nick={g.mode === "duel" ? g.duel?.opponentNick : undefined}
           />
           <CurrentSeal />
           </>
@@ -384,11 +388,13 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
       </footer>
 
       {g.phase === "MODE_SELECT" && <ModeSelect />}
+      {g.phase === "SHOP" && <Shop />}
+      {g.phase === "LOBBY" && <Lobby />}
       {g.phase === "CHARACTER_SELECT" && <CharacterSelect />}
       {g.phase === "CHAPTER_SELECT" && <ChapterSelect />}
       {g.phase === "DIALOGUE" && <DialogueBox />}
       {g.phase === "JUTSU_SELECTION" && <JutsuSelect />}
-      {g.phase === "FAILED" && <FailedPanel />}
+      {g.phase === "FAILED" && g.mode !== "duel" && <FailedPanel />}
       {casting && j && (
         <div className="cast-banner">
           {hero && <Portrait ch={hero} className="cb-hero" />}

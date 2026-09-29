@@ -1,6 +1,7 @@
 "use client";
 
 import { useSession } from "@/hooks/useGame";
+import { useProfile } from "@/hooks/useProfile";
 import { useLang } from "@/hooks/useLang";
 import { t } from "@/lib/i18n";
 import { SIGN_LIST } from "@/lib/vision/gestureDefinitions";
@@ -21,6 +22,7 @@ export function ModeSelect() {
       /* ignore */
     }
   }, [session]);
+  const profile = useProfile();
   const pick = (mode: GameMode) => {
     session.sfx.unlock();
     session.sfx.select();
@@ -29,6 +31,11 @@ export function ModeSelect() {
   return (
     <div className="select-overlay">
       <div className="select-title">{t("chooseMode")}</div>
+      <button className="player-bar" onClick={() => session.dispatch({ type: "OPEN_SHOP" })} title={t("shopTitle")}>
+        <b>{profile.nick}</b>
+        <span className="purse-coin">両</span>
+        <em>{profile.ryo.toLocaleString("en-US")}</em>
+      </button>
       <div className="mode-cards">
         <button className="mode-card story" onClick={() => pick("story")} data-mode="story">
           <div className="mode-kanji">物語</div>
@@ -46,6 +53,25 @@ export function ModeSelect() {
           <div className="mode-title">{t("dojoTitle")}</div>
           <div className="mode-desc">{t("dojoDesc")}</div>
           <div className="mode-meta">{t("dojoMastered", { m: mastered, n: SIGN_LIST.length })}</div>
+        </button>
+        <button className="mode-card duel" onClick={() => pick("duel")} data-mode="duel">
+          <div className="mode-kanji">対戦</div>
+          <div className="mode-title">{t("duelTitle")}</div>
+          <div className="mode-desc">{t("duelDesc")}</div>
+        </button>
+        <button
+          className="mode-card shop-card-mode"
+          onClick={() => {
+            session.sfx.unlock();
+            session.sfx.select();
+            session.dispatch({ type: "OPEN_SHOP" });
+          }}
+          data-mode="shop"
+        >
+          <div className="mode-kanji">店</div>
+          <div className="mode-title">{t("shopTitle")}</div>
+          <div className="mode-desc">{t("shopDesc")}</div>
+          <div className="mode-meta">両 {profile.ryo.toLocaleString("en-US")} {t("ryo")}</div>
         </button>
       </div>
     </div>

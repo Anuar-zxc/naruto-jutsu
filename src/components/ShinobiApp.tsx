@@ -23,6 +23,11 @@ export default function ShinobiApp() {
     }
     session.loadProgress();
     session.loadRecords();
+    session.loadProfile();
+    // Tell the duel opponent we're gone when the tab closes.
+    const bye = () => session.leaveRoom();
+    window.addEventListener("pagehide", bye);
+    return () => window.removeEventListener("pagehide", bye);
   }, [session]);
 
   const start = useCallback(() => {

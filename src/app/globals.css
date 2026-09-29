@@ -3291,3 +3291,87 @@ body::after {
   animation: toast 2.4s ease-out forwards;
 }
 @keyframes toast { 0% { opacity: 0; transform: translateY(-8px); } 10%, 80% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+
+/* ==========================================================================
+   v9 · online duel lobby, profile, ryō & shop
+   ========================================================================== */
+.mode-cards { grid-template-columns: repeat(3, minmax(0, 300px)); }
+.mode-card.duel {
+  background: radial-gradient(circle at 85% 0%, rgba(157, 78, 255, 0.35), transparent 60%), linear-gradient(180deg, #16101f, #09070d);
+}
+.mode-card.duel:hover { box-shadow: 0 20px 50px -14px rgba(157, 78, 255, 0.8); }
+.mode-card.shop-card-mode {
+  background: radial-gradient(circle at 85% 0%, rgba(93, 255, 193, 0.28), transparent 60%), linear-gradient(180deg, #0f1a16, #070b09);
+}
+.mode-card.shop-card-mode:hover { box-shadow: 0 20px 50px -14px rgba(93, 255, 193, 0.7); }
+.mode-card { min-height: 190px; }
+
+.player-bar {
+  display: inline-flex; align-items: center; gap: 10px; margin-top: 12px;
+  padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line-2);
+  background: rgba(0, 0, 0, 0.45); color: var(--text); cursor: pointer;
+}
+.player-bar b { font-family: var(--font-display); letter-spacing: 0.1em; font-size: 18px; }
+.player-bar em { font-style: normal; font-weight: 800; color: var(--gold); }
+.purse-coin {
+  display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  font-family: var(--font-kanji); font-weight: 900; font-size: 13px;
+  background: radial-gradient(circle at 35% 30%, #fff3b0, var(--gold) 55%, #a86b00); color: #3a2400;
+  box-shadow: 0 0 10px rgba(255, 193, 94, 0.6);
+}
+
+/* shop */
+.shop-top { display: flex; gap: 16px; align-items: stretch; flex-wrap: wrap; justify-content: center; margin: 14px 0; }
+.nick-form { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 14px; border: 1px solid var(--line-2); background: rgba(0, 0, 0, 0.4); }
+.nick-form label { font-size: 12px; font-weight: 800; letter-spacing: 0.12em; color: var(--muted); }
+.nick-form input, .lobby-join input {
+  background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line-2); border-radius: 10px;
+  color: var(--text); font: 700 16px var(--font-ui); padding: 8px 12px; outline: none; width: 180px;
+}
+.nick-form input:focus, .lobby-join input:focus { border-color: var(--gold); }
+.purse { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 4px 8px; padding: 10px 16px; border-radius: 14px; border: 1px solid rgba(255, 193, 94, 0.4); background: rgba(40, 28, 6, 0.5); }
+.purse b { font-family: var(--font-display); font-size: 28px; color: var(--gold); letter-spacing: 0.05em; }
+.purse em { grid-column: 1 / -1; font-style: normal; font-size: 12px; color: var(--muted); font-weight: 700; }
+.shop-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 220px)); gap: 12px; }
+@media (max-width: 1180px) { .shop-grid { grid-template-columns: repeat(3, minmax(0, 220px)); } }
+@media (max-width: 760px) { .shop-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; } .mode-cards { grid-template-columns: 1fr; } }
+.shop-card {
+  position: relative; display: grid; gap: 6px; padding: 14px; border-radius: 16px; text-align: left;
+  border: 1px solid var(--line-2); background: linear-gradient(180deg, #16121c, #0a080d);
+  animation: rise 0.35s ease-out both;
+}
+.shop-card.maxed { border-color: var(--gold); box-shadow: 0 0 24px -8px var(--gold); }
+.shop-kanji { font-family: var(--font-kanji); font-weight: 900; font-size: 40px; line-height: 1; color: var(--gold); }
+.shop-name { font-family: var(--font-display); letter-spacing: 0.1em; font-size: 20px; }
+.shop-per { font-size: 13px; font-weight: 700; color: var(--muted); min-height: 2.6em; }
+.shop-pips { display: flex; align-items: center; gap: 4px; }
+.shop-pips i { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(255, 193, 94, 0.5); }
+.shop-pips i.on { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+.shop-pips span { margin-left: 6px; font-size: 12px; font-weight: 800; color: var(--muted); }
+.shop-card .btn { width: 100%; }
+.shop-flash { position: absolute; top: 8px; right: 12px; font-family: var(--font-display); font-size: 28px; color: var(--gold); animation: mistake-pop 0.7s ease-out forwards; left: auto; }
+
+/* lobby */
+.lobby-me { display: flex; align-items: center; gap: 12px; margin: 10px 0 6px; }
+.lobby-me .lobby-hero { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; object-position: top; border: 2px solid var(--gold); background: #1a1320; }
+.lobby-me b { display: block; font-family: var(--font-display); font-size: 26px; letter-spacing: 0.1em; }
+.lobby-me span { color: var(--muted); font-weight: 700; }
+.lobby-actions { display: grid; justify-items: center; gap: 12px; margin: 12px 0; }
+.lobby-or { color: var(--muted); font-weight: 700; font-size: 14px; }
+.lobby-join { display: flex; gap: 8px; }
+.lobby-join input { width: 150px; text-align: center; font-family: var(--font-display); font-size: 26px; letter-spacing: 0.3em; text-transform: uppercase; }
+.lobby-room { display: grid; justify-items: center; gap: 8px; margin: 10px 0; }
+.lobby-label { font-size: 12px; font-weight: 800; letter-spacing: 0.2em; color: var(--muted); }
+.lobby-code {
+  font-family: var(--font-display); font-size: clamp(56px, 10vw, 96px); letter-spacing: 0.3em; padding-left: 0.3em;
+  color: var(--gold); text-shadow: 0 0 30px rgba(255, 193, 94, 0.6);
+  border: 2px dashed rgba(255, 193, 94, 0.5); border-radius: 18px; padding: 4px 18px 4px 36px; background: rgba(0, 0, 0, 0.4);
+}
+.lobby-hint, .lobby-rules { max-width: 560px; text-align: center; color: var(--muted); font-weight: 600; font-size: 14px; margin: 4px auto; }
+.lobby-rules { font-size: 13px; opacity: 0.85; }
+.lobby-wait { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; color: var(--text); margin: 8px 0; }
+.spinner.small { width: 18px; height: 18px; border-width: 2px; }
+.lobby-error { margin: 8px auto; padding: 8px 14px; border-radius: 10px; border: 1px solid rgba(230, 57, 70, 0.6); background: rgba(230, 57, 70, 0.15); color: #ff9aa4; font-weight: 700; max-width: 520px; text-align: center; }
+.duel-status { align-self: center; font-weight: 800; font-size: 13px; color: var(--muted); }
+.duel-status.ok { color: #9dffd9; }
+.reward-line { display: inline-flex; align-items: center; gap: 8px; margin: 6px auto; padding: 4px 14px; border-radius: 999px; font-family: var(--font-display); font-size: 22px; letter-spacing: 0.08em; color: var(--gold); background: rgba(40, 28, 6, 0.6); border: 1px solid rgba(255, 193, 94, 0.5); animation: stamp-in 0.5s 0.4s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
