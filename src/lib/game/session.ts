@@ -12,7 +12,7 @@ import type { GameAction, GameState, Phase } from "@/types/game";
 import type { Correction, RecognitionFrame, SignId } from "@/types/gestures";
 import { TRAIN_MASTERY, gameReducer, initialGameState } from "./gameState";
 import { rankFor } from "./scoring";
-import { JUTSU } from "./jutsu";
+import { JUTSU, impactMs } from "./jutsu";
 import { isComboMilestone } from "./combo";
 import { Sfx } from "@/lib/audio/sfx";
 import { MusicPlayer } from "@/lib/audio/music";
@@ -90,7 +90,7 @@ export const TIMING = {
   countdownStep: 750,
   successCharge: 950,
   castImpact: 650,
-  castDuration: 2400,
+  castDuration: 2600,
   nextRound: 2300,
   /** Extra time a wrong seal must be held (after recognition) before it counts as a mistake. */
   wrongHold: 350,
@@ -515,9 +515,9 @@ export class GameSession {
         this.schedule(TIMING.successCharge, () => this.dispatch({ type: "SUCCESS_DONE" }));
         break;
       case "JUTSU_CAST": {
-        const el = JUTSU[this.state.jutsuId!].element;
-        this.sfx.attack(el);
-        this.schedule(TIMING.castImpact, () => this.sfx.hit());
+        const id = this.state.jutsuId!;
+        this.sfx.attack(JUTSU[id].element, id);
+        this.schedule(impactMs(id), () => this.sfx.impact(true));
         this.schedule(TIMING.castDuration, () => this.dispatch({ type: "CAST_DONE" }));
         break;
       }
@@ -548,7 +548,8 @@ export class GameSession {
       case "VICTORY":
         this.payout(true);
         this.lastRecord = this.commitRecord(this.state);
-        this.schedule(250, () => this.sfx.victory());
+        // After the announcer's K.O. / flawless call.
+        this.schedule(2900, () => this.sfx.victory());
         if (this.state.mode === "story" && this.state.chapter != null) this.saveProgress(this.state.chapter + 1);
         break;
     }

@@ -10,7 +10,13 @@ import type { Element } from "@/types/game";
 type Ctx = AudioContext;
 
 /** Clip ids → files in /public/assets/sfx. */
-export const SFX_CLIPS = ["charge", "fire", "lightning", "rasengan", "strike", "victory-voice", "defeat"] as const;
+export const SFX_CLIPS = [
+  "charge", "fire", "lightning", "rasengan", "strike", "victory-voice", "defeat",
+  // Optional slots (v12) — drop a file with this name into /public/assets/sfx/ and it is used.
+  "round", "fight", "finish", "ko", "flawless",
+  "chidori", "water", "kirin", "clone", "summon", "poof",
+  "hit-light", "hit-heavy", "whoosh", "block", "click",
+] as const;
 export type ClipId = (typeof SFX_CLIPS)[number];
 
 export class Sfx {
@@ -174,7 +180,25 @@ export class Sfx {
     this.tone(110, 0.9, { type: "sawtooth", gain: 0.08, to: 440, attack: 0.6 });
   }
 
-  attack(el: Element) {
+  attack(el: Element, jutsu?: string) {
+    const byJutsu: Record<string, ClipId[]> = {
+      CHIDORI: ["chidori", "lightning"],
+      KIRIN: ["kirin", "lightning"],
+      SUIRYUDAN: ["water"],
+      KAGE_BUNSHIN: ["clone", "poof"],
+      KUCHIYOSE: ["summon", "poof"],
+      KAWARIMI: ["poof"],
+      HENGE: ["poof"],
+    };
+    for (const c of (jutsu && byJutsu[jutsu]) || []) if (this.clip(c, { gain: 1, maxDur: 3.4 })) return;
+    if (jutsu === "KAGE_BUNSHIN" || jutsu === "KUCHIYOSE" || jutsu === "KAWARIMI" || jutsu === "HENGE") {
+      this.poof();
+      if (jutsu === "KUCHIYOSE") this.tone(55, 1.2, { type: "sine", gain: 0.5, to: 30, delay: 0.35 });
+      return;
+    }
+    if (jutsu === "KIRIN") {
+      this.noise(2, { type: "lowpass", freq: 900, to: 80, gain: 0.8, attack: 0.02, delay: 0.25 });
+    }
     const clipFor: Partial<Record<Element, ClipId>> = { fire: "fire", lightning: "lightning", chakra: "rasengan", wind: "rasengan" };
     const id = clipFor[el];
     if (id && this.clip(id, { gain: 1, maxDur: 3.4 })) return;
@@ -229,6 +253,63 @@ export class Sfx {
     if (this.clip("defeat", { gain: 0.85 })) return;
     [392, 330, 262, 196, 131].forEach((f, i) => this.tone(f, 0.55, { type: "sawtooth", gain: 0.07, delay: i * 0.22 }));
     this.tone(65, 1.6, { type: "sine", gain: 0.3, to: 40, delay: 0.2 });
+  }
+
+  // --- v12: fighting-game announcer & impacts (clip if supplied, synth otherwise) ---
+
+  /** "Round N" / "Fight!" / "Finish him!" / "K.O." / "Flawless victory". */
+  announce(kind: "round" | "fight" | "finish" | "ko" | "flawless") {
+    if (this.clip(kind, { gain: 1 })) return;
+    const taiko = (d = 0, g = 0.6) => {
+      this.tone(70, 0.5, { type: "sine", gain: g, to: 38, delay: d });
+      this.noise(0.18, { type: "lowpass", freq: 700, gain: g * 0.6, delay: d });
+    };
+    if (kind === "round") {
+      taiko(0);
+      this.tone(220, 0.9, { type: "triangle", gain: 0.1, delay: 0.02 });
+    } else if (kind === "fight") {
+      taiko(0, 0.7);
+      taiko(0.14, 0.7);
+      this.noise(0.5, { type: "highpass", freq: 3000, gain: 0.15, delay: 0.14 });
+      this.tone(440, 0.5, { type: "sawtooth", gain: 0.08, delay: 0.14, to: 880 });
+    } else if (kind === "finish") {
+      [0, 0.18, 0.36].forEach((d) => taiko(d, 0.55));
+      this.tone(110, 1.4, { type: "sawtooth", gain: 0.1, to: 55, delay: 0.36 });
+    } else if (kind === "ko") {
+      this.tone(50, 1.4, { type: "sine", gain: 0.7, to: 28 });
+      this.noise(1.2, { type: "lowpass", freq: 1500, to: 100, gain: 0.6 });
+    } else {
+      [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.6, { type: "triangle", gain: 0.12, delay: i * 0.09 }));
+    }
+  }
+
+  poof() {
+    if (this.clip("poof", { gain: 0.9 })) return;
+    this.noise(0.45, { type: "bandpass", freq: 1800, to: 250, q: 1.2, gain: 0.55, attack: 0.005 });
+    this.tone(180, 0.2, { type: "sine", gain: 0.2, to: 60 });
+  }
+
+  whoosh() {
+    if (this.clip("whoosh", { gain: 0.8 })) return;
+    this.noise(0.35, { type: "bandpass", freq: 500, to: 3200, q: 3, gain: 0.35, attack: 0.12 });
+  }
+
+  impact(heavy = false) {
+    if (this.clip(heavy ? "hit-heavy" : "hit-light", { gain: 1 })) return;
+    this.tone(heavy ? 70 : 140, heavy ? 0.45 : 0.2, { type: "sine", gain: heavy ? 0.6 : 0.4, to: 35 });
+    this.noise(heavy ? 0.3 : 0.12, { type: "lowpass", freq: heavy ? 1200 : 2400, gain: heavy ? 0.5 : 0.35 });
+  }
+
+  block() {
+    if (this.clip("block", { gain: 0.9 })) return;
+    [2100, 3150, 4700].forEach((f, i) => this.tone(f, 0.35, { type: "triangle", gain: 0.08, delay: i * 0.01 }));
+  }
+
+  /** Menu click (finger or mouse). */
+  click() {
+    if (this.clip("click", { gain: 0.7 })) return;
+    this.tone(1200, 0.05, { type: "square", gain: 0.06 });
+    this.tone(1800, 0.06, { type: "triangle", gain: 0.06, delay: 0.03 });
   }
 
   /** Dojo: a seal mastered. */

@@ -81,6 +81,16 @@ export const STR = {
 
   // HUD
   round: { ru: "РАУНД", en: "ROUND" },
+  annFight: { ru: "БОЙ!", en: "FIGHT!" },
+  annFinish: { ru: "ДОБИВАЙ!", en: "FINISH IT!" },
+  annKo: { ru: "K.O.", en: "K.O." },
+  annWin: { ru: "ПОБЕДА", en: "YOU WIN" },
+  annFlawless: { ru: "БЕЗУПРЕЧНАЯ ПОБЕДА", en: "FLAWLESS VICTORY" },
+  annLose: { ru: "ТЫ ПАЛ", en: "YOU FELL" },
+  annHits: { ru: "{n} ПОПАДАНИЯ ПОДРЯД", en: "{n} HIT COMBO" },
+  handCursor: { ru: "Управление пальцем", en: "Finger control" },
+  handCursorOn: { ru: "Палец = курсор. Щипок или задержка 1 с = клик", en: "Finger = cursor. Pinch or hold 1 s = click" },
+  handCursorOff: { ru: "Управление пальцем выключено", en: "Finger control off" },
   score: { ru: "ОЧКИ", en: "SCORE" },
   combo: { ru: "КОМБО", en: "COMBO" },
   backTitle: { ru: "В главное меню", en: "Back to title" },

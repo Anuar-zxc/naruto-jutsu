@@ -8,9 +8,13 @@
  * a breathy flute pad and taiko drums — a different mood per scene.
  */
 
-export type TrackId = "menu" | "dialogue" | "battle" | "boss" | "victory";
+export type TrackId = "menu" | "dialogue" | "battle" | "boss" | "victory" | "defeat";
 
-const FILE = (id: TrackId) => `/assets/music/${id}.mp3`;
+/** Extra files that can stand in for a scene (one picked at random per fight). */
+const VARIANTS: Partial<Record<TrackId, string[]>> = { battle: ["battle", "battle2", "battle3"] };
+/** Scenes that stay silent when their file is missing (no procedural fallback). */
+const FILE_ONLY: TrackId[] = ["defeat"];
+const FILE = (name: string) => `/assets/music/${name}.mp3`;
 const MUSIC_VOL = 0.55;
 
 /** In-scale (miyako-bushi) on E: E F A B C, over several octaves (MIDI). */
@@ -34,6 +38,7 @@ const STYLES: Record<TrackId, Style> = {
   battle: { bpm: 132, density: 0.6, drums: [2, 0, 1, 0, 2, 0, 1, 1, 2, 0, 1, 0, 2, 1, 1, 1], bass: true, pad: false, octave: 1 },
   boss: { bpm: 150, density: 0.75, drums: [2, 1, 1, 0, 2, 1, 2, 1, 2, 1, 1, 0, 2, 2, 1, 1], bass: true, pad: true, octave: 1 },
   victory: { bpm: 96, density: 0.5, drums: [2, 0, 0, 0, 1, 0, 0, 0, 2, 0, 1, 0, 1, 0, 0, 0], bass: true, pad: true, octave: 2 },
+  defeat: { bpm: 56, density: 0.15, drums: new Array(16).fill(0), bass: false, pad: true, octave: 0 },
 };
 
 /** Deterministic PRNG so every scene has its own repeatable (original) phrase. */
@@ -241,7 +246,7 @@ export class MusicPlayer {
   private wanted: TrackId | null = null;
   /** Bumped on every play/stop so stale async work can bail out. */
   private token = 0;
-  private available = new Map<TrackId, boolean>();
+  private available = new Map<string, boolean>();
   enabled = true;
 
   unlock() {
@@ -266,7 +271,7 @@ export class MusicPlayer {
     if (this.audio) this.fade(this.audio, on ? MUSIC_VOL : 0);
   }
 
-  private async hasFile(id: TrackId): Promise<boolean> {
+  private async hasFile(id: string): Promise<boolean> {
     if (this.available.has(id)) return this.available.get(id)!;
     let ok = false;
     try {
@@ -285,18 +290,21 @@ export class MusicPlayer {
     if (id === this.current || !this.ctx) return;
     const my = ++this.token;
     this.current = id;
-    const file = await this.hasFile(id);
+    const names = VARIANTS[id] ?? [id];
+    const found: string[] = [];
+    for (const n of names) if (await this.hasFile(n)) found.push(n);
     if (my !== this.token) return; // superseded while checking
     this.silenceAll();
+    const file = found.length ? found[Math.floor(Math.random() * found.length)] : null;
     if (file) {
-      const a = new Audio(FILE(id));
+      const a = new Audio(FILE(file));
       a.loop = id !== "victory";
       a.volume = 0;
       this.audio = a;
       this.live.add(a);
       void a.play().catch(() => undefined);
       this.fade(a, this.enabled ? MUSIC_VOL : 0);
-    } else {
+    } else if (!FILE_ONLY.includes(id)) {
       this.proc?.start(id);
     }
   }
@@ -344,7 +352,7 @@ export class MusicPlayer {
 export function trackFor(phase: string, bossHp: number, bossMaxHp: number): TrackId | null {
   if (phase === "IDLE") return null;
   if (phase === "VICTORY") return "victory";
-  if (phase === "DEFEAT") return null; // the defeat sting plays alone
+  if (phase === "DEFEAT") return "defeat"; // only if defeat.mp3 was added — otherwise the sting plays alone
   if (phase === "DIALOGUE" || phase === "TRAINING") return "dialogue";
   if (["COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED", "JUTSU_SELECTION"].includes(phase)) {
     // One track for the whole fight: no switch (and restart) when the enemy is low.

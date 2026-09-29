@@ -51,7 +51,7 @@ export function CharacterSelect() {
             onClick={() => choose(c.id)}
             data-character={c.id}
           >
-            <Portrait ch={c} className="char-card-img" />
+            <Portrait ch={c} className="char-card-img" lazy />
             <span className="cc-name">{tr(c.name)}</span>
             {c.tag && <span className={`cc-tag ${c.villain ? "rogue" : ""}`}>{tr(c.tag)}</span>}
           </button>

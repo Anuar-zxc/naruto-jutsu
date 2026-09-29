@@ -7,6 +7,8 @@ import { CHARACTERS } from "@/lib/game/characters";
 import { t, tr } from "@/lib/i18n";
 import { LangToggle } from "./LangToggle";
 import { Portrait } from "./Portrait";
+import { useState, useSyncExternalStore } from "react";
+import { handControl } from "@/lib/vision/handPointer";
 
 interface Props {
   muted: boolean;
@@ -23,6 +25,8 @@ export function GameHUD({ muted, onToggleMute, musicOn, onToggleMusic, debug, on
   const g = useGame();
   const mult = comboMultiplier(g.stats.combo);
   const hero = g.characterId ? CHARACTERS[g.characterId] : null;
+  const hand = useSyncExternalStore(handControl.subscribe, handControl.isOn, () => false);
+  const [toast, setToast] = useState<{ text: string; key: number } | null>(null);
   return (
     <header className="hud">
       <button className="hud-logo" onClick={onQuit} title={t("backTitle")}>
@@ -67,6 +71,23 @@ export function GameHUD({ muted, onToggleMute, musicOn, onToggleMusic, debug, on
       )}
       <div className="hud-actions">
         <LangToggle />
+        <button
+          className={`icon-btn hand-btn ${hand ? "on-gold" : "off"}`}
+          onClick={() => {
+            handControl.set(!hand);
+            setToast({ text: t(!hand ? "handCursorOn" : "handCursorOff"), key: Date.now() });
+          }}
+          title={t("handCursor")}
+          aria-label={t("handCursor")}
+          data-action="hand-control"
+        >
+          ☝
+        </button>
+        {toast && (
+          <span className="hud-toast" key={toast.key}>
+            {toast.text}
+          </span>
+        )}
         <button className={`icon-btn ${debug ? "on" : ""}`} onClick={onToggleDebug} title={t("debugTitle")}>
           ◉
         </button>

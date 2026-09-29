@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 /**
  * Game logic tests: pure reducer (quick battle + story), content integrity,
  * and an end-to-end session driven by synthetic camera frames through the
@@ -75,7 +76,9 @@ async function main() {
       unlocked.push(...ch.unlocks);
     }
     assert.deepEqual([...unlocked].sort(), [...JUTSU_LIST.map((j) => j.id)].sort());
-    assert.equal(CHARACTER_LIST.length, 24);
+    assert.equal(CHARACTER_LIST.length, 63);
+    assert.equal(new Set(CHARACTER_LIST.map((c) => c.id)).size, 63, "no duplicate ids");
+    for (const c of CHARACTER_LIST) assert.ok(existsSync(`public${c.image}`), `artwork for ${c.id}`);
   });
 
   await test("loadout: pick exactly 3 once, then rounds rotate through them with no selection screen", () => {

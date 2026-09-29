@@ -9,7 +9,7 @@ import { tr } from "@/lib/i18n";
  * is still downloading (slow networks) or if it is missing, a stylised silhouette
  * with the character's glyph is shown in its place.
  */
-export function Portrait({ ch, className = "", flip = false }: { ch: Character; className?: string; flip?: boolean }) {
+export function Portrait({ ch, className = "", flip = false, lazy = false }: { ch: Character; className?: string; flip?: boolean; lazy?: boolean }) {
   const [broken, setBroken] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const ref = useRef<HTMLImageElement>(null);
@@ -47,6 +47,7 @@ export function Portrait({ ch, className = "", flip = false }: { ch: Character; 
         alt={tr(ch.name)}
         draggable={false}
         decoding="async"
+        loading={lazy ? "lazy" : undefined}
         onLoad={() => setLoaded(true)}
         onError={() => setBroken(true)}
       />

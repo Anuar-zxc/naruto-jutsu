@@ -83,3 +83,8 @@ export const JUTSU_ORDER: JutsuId[] = ["HENGE", "KAWARIMI", "KAGE_BUNSHIN", "GOK
 export const LOADOUT_SIZE = 3;
 
 export const BOSS = { maxHp: 1000 };
+
+/** When a jutsu's animation lands (ms after JUTSU_CAST) — melee techniques need a dash first. */
+export const IMPACT_MS: Partial<Record<JutsuId, number>> = { RASENGAN: 820, CHIDORI: 800, KIRIN: 900, KUCHIYOSE: 1150, KAWARIMI: 900, KAGE_BUNSHIN: 950, SUIRYUDAN: 900, HOSENKA: 800, RASENSHURIKEN: 850, HENGE: 850 };
+export const impactMs = (id: JutsuId) => IMPACT_MS[id] ?? 650;
+

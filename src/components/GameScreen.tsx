@@ -7,13 +7,16 @@ import { FxEngine } from "@/lib/fx/fxEngine";
 import { trackFor } from "@/lib/audio/music";
 import { PhaseTransition } from "./PhaseTransition";
 import { reportFps } from "@/lib/perf/quality";
-import { JUTSU } from "@/lib/game/jutsu";
+import { JUTSU, impactMs } from "@/lib/game/jutsu";
 import { CHARACTERS } from "@/lib/game/characters";
 import { TIMING } from "@/lib/game/session";
 import { comboMultiplier } from "@/lib/game/combo";
 import { SIGNS } from "@/lib/vision/gestureDefinitions";
 import type { GameState } from "@/types/game";
 import { Boss } from "./Boss";
+import { Announcer, BattleStage } from "./BattleStage";
+import { castJutsu, enemyStrike, point } from "@/lib/fx/jutsuAnim";
+import { HandCursor } from "./HandCursor";
 import { ArenaBackdrop } from "./ArenaBackdrop";
 import { CharacterSelect } from "./CharacterSelect";
 import { ChapterSelect } from "./ChapterSelect";
@@ -40,6 +43,8 @@ import { enraged } from "@/lib/game/gameState";
 import { askSensei, tauntRequest } from "@/lib/ai/sensei";
 
 const LS_MUTE = "shinobi.muted";
+/** Phases shown on the fighting-game stage. */
+const FIGHT_PHASES = ["JUTSU_SELECTION", "COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED", "VICTORY", "DEFEAT"];
 // v2: music defaults back ON after the soundtrack update, even if it was switched off before.
 const LS_MUSIC = "shinobi.music.v2";
 
@@ -67,6 +72,8 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const bossRef = useRef<HTMLDivElement>(null);
+  const heroRef = useRef<HTMLDivElement>(null);
+  const layerRef = useRef<HTMLDivElement>(null);
   const fxCanvas = useRef<HTMLCanvasElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const fx = useRef<FxEngine | null>(null);
@@ -201,7 +208,19 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
     }
 
     // Enemy counter-attack when a jutsu fails.
-    if (g.lastEnemyHit && g.lastEnemyHit.id !== p.lastEnemyHit?.id) {
+    if (g.lastEnemyHit && g.lastEnemyHit.id !== p.lastEnemyHit?.id && heroRef.current && fx.current) {
+      const amount = g.lastEnemyHit.amount;
+      enemyStrike({
+        fx: fx.current,
+        hero: heroRef.current,
+        foe: bossRef.current,
+        onHit: () => {
+          setFlash({ color: "#ff1a3c", key: Date.now() });
+          setEnemyHit({ amount, key: Date.now() });
+          shake(true);
+        },
+      });
+    } else if (g.lastEnemyHit && g.lastEnemyHit.id !== p.lastEnemyHit?.id) {
       const from = center(bossRef.current, 0.45);
       const to = center(panelRef.current, 0.45);
       fx.current?.projectile("chakra", from, to, 380, () => {
@@ -223,7 +242,8 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
       if (g.lastRound.burn) fx.current?.burst(b.x, b.y, { colors: ["#ff5e1a", "#ffd166", "#e63946"], count: 90, speed: 9, size: 6, life: 50, gravity: -0.08 });
       if (g.lastRound.summon) setTimeout(() => fx.current?.burst(b.x, b.y, { colors: ["#c77dff", "#f1d9ff", "#ffffff"], count: 90, speed: 11, size: 6, life: 50 }), 350);
       if (g.lastRound.blocked) {
-        const c = center(panelRef.current, 0.45);
+        session.sfx.block();
+        const c = heroRef.current ? point(heroRef.current, 0.75, 0.45) : center(panelRef.current, 0.45);
         fx.current?.ring(c.x, c.y, "#7fe3ff", { speed: 10, width: 12, life: 36 });
       }
       if (g.lastRound.burn || g.lastRound.summon) setHitKey((k) => k + 1);
@@ -264,11 +284,28 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
     if (g.phase === p.phase) return;
 
     if (g.phase === "SUCCESS" && j) {
-      const c = center(panelRef.current, 0.45);
+      const c = heroRef.current ? point(heroRef.current, 0.72, 0.42) : center(panelRef.current, 0.45);
       fx.current?.charge(c.x, c.y, j.element);
       setFlash({ color: j.glow, key: Date.now() });
     }
-    if (g.phase === "JUTSU_CAST" && j && g.lastCast) {
+    if (g.phase === "JUTSU_CAST" && j && g.lastCast && heroRef.current && fx.current && g.jutsuId) {
+      const cast = g.lastCast;
+      castJutsu(g.jutsuId, {
+        fx: fx.current,
+        layer: layerRef.current,
+        hero: heroRef.current,
+        foe: bossRef.current,
+        heroImg: hero?.image,
+        whoosh: () => session.sfx.whoosh(),
+        poof: () => session.sfx.poof(),
+        onHit: () => {
+          setHitKey((k) => k + 1);
+          setDamage({ amount: cast.damage, perfect: cast.perfect, key: Date.now() });
+          setFlash({ color: j.color, key: Date.now() });
+          shake(true);
+        },
+      });
+    } else if (g.phase === "JUTSU_CAST" && j && g.lastCast) {
       const from = center(panelRef.current, 0.45);
       const to = center(bossRef.current, 0.45);
       const cast = g.lastCast;
@@ -308,15 +345,16 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
   };
 
   const j = g.jutsuId ? JUTSU[g.jutsuId] : null;
-  const casting = g.phase === "SUCCESS" || g.phase === "JUTSU_CAST";
-  const hpDelay = g.phase === "JUTSU_CAST" ? TIMING.castImpact : 0;
   const hero = g.characterId ? CHARACTERS[g.characterId] : null;
+  const casting = g.phase === "SUCCESS" || g.phase === "JUTSU_CAST";
+  const hpDelay = g.phase === "JUTSU_CAST" && g.jutsuId ? impactMs(g.jutsuId) : 0;
+  const mk = g.mode !== "training" && !!g.bossId && FIGHT_PHASES.includes(g.phase);
   const location = locationFor(g);
 
   return (
     <div
       ref={rootRef}
-      className={`game ${enraged(g) && ["COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND"].includes(g.phase) ? "enraged" : ""} ${
+      className={`game ${mk ? "mk" : ""} ${enraged(g) && ["COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND"].includes(g.phase) ? "enraged" : ""} ${
         g.mode !== "training" && g.playerHp > 0 && g.playerHp <= g.playerMaxHp * 0.3 && ["COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED"].includes(g.phase) ? "lowhp" : ""
       }`}
       style={j ? { ["--el" as string]: j.color, ["--el-glow" as string]: j.glow } : undefined}>
@@ -366,6 +404,10 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
         <section className="col-side">
           {g.phase === "TRAINING" ? (
             <Dojo />
+          ) : mk ? (
+            <>
+              <BattleStage ref={bossRef} heroRef={heroRef} location={location} hitKey={hitKey} damage={damage} enemyHit={enemyHit} hpDelayMs={hpDelay} taunt={taunt} />
+            </>
           ) : (
           <>
           <Boss
@@ -458,7 +500,10 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
       )}
       <PhaseTransition phase={g.phase} />
       {flash && <div className="flash" key={flash.key} style={{ background: flash.color }} />}
+      {mk && <Announcer />}
+      <div ref={layerRef} className="jfx-layer" aria-hidden />
       <canvas ref={fxCanvas} className="fx-canvas" aria-hidden />
+      <HandCursor />
     </div>
   );
 }

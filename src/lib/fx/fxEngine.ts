@@ -42,7 +42,28 @@ interface Projectile {
   boltAt?: number;
 }
 
-const PALETTE: Record<Element, string[]> = {
+/** A bespoke timed drawing (jutsu animations): `draw` gets progress 0..1 each frame. */
+interface Anim {
+  t0: number;
+  dur: number;
+  draw: (ctx: CanvasRenderingContext2D, k: number, now: number) => void;
+  done?: () => void;
+}
+
+/** Soft smoke puff, drawn with normal blending (it must be able to hide things). */
+interface Puff {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  r: number;
+  vr: number;
+  life: number;
+  max: number;
+  shade: number;
+}
+
+export const PALETTE: Record<Element, string[]> = {
   fire: ["#fff3c4", "#ffd166", "#ff9f1c", "#ff5e1a", "#e63946"],
   water: ["#e8fbff", "#9be7ff", "#4cc9f0", "#1f8bff", "#3a5bff"],
   lightning: ["#ffffff", "#e3f1ff", "#b8c8ff", "#b28cff", "#7b5cff"],
@@ -57,6 +78,8 @@ export class FxEngine {
   private particles: Particle[] = [];
   private rings: Ring[] = [];
   private projectiles: Projectile[] = [];
+  private anims: Anim[] = [];
+  private puffs: Puff[] = [];
   private raf = 0;
   private last = 0;
   private W = 0;
@@ -116,6 +139,40 @@ export class FxEngine {
     this.kick();
   }
 
+  /** Run a custom canvas animation for `dur` ms. */
+  anim(dur: number, draw: Anim["draw"], done?: () => void) {
+    this.anims.push({ t0: performance.now(), dur, draw, done });
+    this.kick();
+  }
+
+  /** Emit one free particle (used by jutsu animations for trails and streams). */
+  spark(x: number, y: number, vx: number, vy: number, color: string, o: { size?: number; life?: number; gravity?: number; drag?: number } = {}) {
+    if (particleScale() < 1 && Math.random() > particleScale()) return;
+    this.particles.push({ x, y, vx, vy, life: 0, max: o.life ?? 30, size: o.size ?? 4, color, drag: o.drag ?? 0.95, gravity: o.gravity ?? 0, shrink: true });
+    this.kick();
+  }
+
+  /** A "poof" cloud of white-grey smoke (shadow clones, substitution, summoning). */
+  smoke(x: number, y: number, o: { count?: number; size?: number; spread?: number; life?: number } = {}) {
+    const n = Math.max(6, Math.round((o.count ?? 18) * particleScale()));
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = (o.spread ?? 3) * (0.3 + Math.random());
+      this.puffs.push({
+        x: x + Math.cos(a) * 10,
+        y: y + Math.sin(a) * 10,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp * 0.7 - 0.4,
+        r: (o.size ?? 26) * (0.5 + Math.random() * 0.7),
+        vr: 0.9 + Math.random() * 0.8,
+        life: 0,
+        max: (o.life ?? 45) * (0.7 + Math.random() * 0.5),
+        shade: 200 + ((Math.random() * 55) | 0),
+      });
+    }
+    this.kick();
+  }
+
   /** Seal confirmed: small burst + ring in the element colour. */
   seal(x: number, y: number, el: Element) {
     this.burst(x, y, { colors: PALETTE[el], count: 34, speed: 7, size: 4, life: 40 });
@@ -156,7 +213,7 @@ export class FxEngine {
     this.kick();
   }
 
-  private impact(el: Element, x: number, y: number) {
+  impact(el: Element, x: number, y: number) {
     const c = PALETTE[el];
     // Brighter, heavier impacts: core flash, two shock rings and a wide debris cone.
     this.burst(x, y, { colors: c, count: 200, speed: 15, size: 7, life: 65, gravity: el === "water" ? 0.25 : 0.04 });
@@ -172,7 +229,48 @@ export class FxEngine {
     const dt = Math.min(3, (now - this.last) / 16.67);
     this.last = now;
     ctx.clearRect(0, 0, this.W, this.H);
+
+    // Smoke first, with normal blending, so glowing effects sit on top of it.
+    ctx.globalCompositeOperation = "source-over";
+    for (const p of this.puffs) {
+      p.life += dt;
+      p.vx *= Math.pow(0.95, dt);
+      p.vy *= Math.pow(0.95, dt);
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.r += p.vr * dt;
+      const k = 1 - p.life / p.max;
+      if (k <= 0) continue;
+      const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r);
+      g.addColorStop(0, `rgba(${p.shade},${p.shade},${p.shade},${0.85 * k})`);
+      g.addColorStop(0.6, `rgba(${p.shade - 30},${p.shade - 30},${p.shade - 25},${0.5 * k})`);
+      g.addColorStop(1, "rgba(120,120,130,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    this.puffs = this.puffs.filter((p) => p.life < p.max);
+
     ctx.globalCompositeOperation = "lighter";
+    for (const a of this.anims) {
+      // rAF timestamps can be slightly older than t0 → clamp, never pass a negative progress.
+      const k = Math.max(0, Math.min(1, (now - a.t0) / a.dur));
+      ctx.save();
+      try {
+        a.draw(ctx, k, now);
+      } catch {
+        a.dur = 0; // a broken animation must never stop the whole effects loop
+      }
+      ctx.restore();
+      if (k >= 1 || a.dur === 0) {
+        a.dur = -1;
+        a.done?.();
+      }
+    }
+    this.anims = this.anims.filter((a) => a.dur >= 0);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = 1;
 
     for (const p of this.projectiles) this.stepProjectile(ctx, p, now);
     this.projectiles = this.projectiles.filter((p) => !p.hit);
@@ -211,7 +309,7 @@ export class FxEngine {
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = "source-over";
 
-    if (this.particles.length || this.rings.length || this.projectiles.length) {
+    if (this.particles.length || this.rings.length || this.projectiles.length || this.anims.length || this.puffs.length) {
       this.raf = requestAnimationFrame(this.frame);
     } else {
       ctx.clearRect(0, 0, this.W, this.H);
@@ -331,7 +429,7 @@ export class FxEngine {
   }
 }
 
-function jagged(a: { x: number; y: number }, b: { x: number; y: number }, segs: number, spread: number) {
+export function jagged(a: { x: number; y: number }, b: { x: number; y: number }, segs: number, spread: number) {
   const pts = [a];
   const dx = b.x - a.x;
   const dy = b.y - a.y;

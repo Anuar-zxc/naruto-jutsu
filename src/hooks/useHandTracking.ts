@@ -8,6 +8,7 @@ import { SyntheticHandSource } from "@/lib/vision/syntheticSource";
 import { drawOverlay } from "@/lib/vision/overlayRenderer";
 import { extractFrame } from "@/lib/vision/gestureFeatures";
 import type { Phase } from "@/types/game";
+import { handControl } from "@/lib/vision/handPointer";
 
 /** Phases where the camera image is visible AND hands matter. Elsewhere the model is paused. */
 const DETECT: Phase[] = ["CAMERA_CHECK", "READY", "COUNTDOWN", "PLAYING", "SUCCESS", "TRAINING"];
@@ -53,6 +54,7 @@ export function useHandTracking({ session, active, synthetic, videoRef, canvasRe
         if (cancelled) return;
         setStatus("running");
         let skip = 0;
+        let menuTick = 0;
         source.start(
           video,
           (raw) => {
@@ -65,6 +67,7 @@ export function useHandTracking({ session, active, synthetic, videoRef, canvasRe
           }
           const frame = rec.process(raw);
           lastFrame.current = frame;
+          handControl.push(frame.features);
           session.onFrame(frame);
           const canvas = canvasRef.current;
           if (canvas) {
@@ -77,7 +80,12 @@ export function useHandTracking({ session, active, synthetic, videoRef, canvasRe
             });
           }
           },
-          () => DETECT.includes(session.getState().phase),
+          () => {
+            const phase = session.getState().phase;
+            if (DETECT.includes(phase)) return true;
+            // Finger control in menus: run the model on every other frame (~15 fps) — enough for a cursor.
+            return handControl.activeIn(phase) && ++menuTick % 2 === 0;
+          },
         );
       } catch (e) {
         if (cancelled) return;
