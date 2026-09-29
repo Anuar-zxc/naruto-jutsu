@@ -9,4 +9,3 @@ the synthesised sound.
   strike.mp3         the enemy's counter-attack
   victory-voice.mp3  victory shout
   defeat.mp3         defeat sting
-  signs.mp3          hand-sign flurry at the start of the countdown

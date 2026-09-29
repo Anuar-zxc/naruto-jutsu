@@ -281,7 +281,6 @@ export class GameSession {
         break;
       case "COUNTDOWN": {
         this.sfx.tick();
-        this.sfx.signs();
         const step = () =>
           this.schedule(TIMING.countdownStep, () => {
             this.dispatch({ type: "COUNTDOWN_TICK" });

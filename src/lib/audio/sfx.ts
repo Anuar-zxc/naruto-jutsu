@@ -10,7 +10,7 @@ import type { Element } from "@/types/game";
 type Ctx = AudioContext;
 
 /** Clip ids → files in /public/assets/sfx. */
-export const SFX_CLIPS = ["charge", "fire", "lightning", "rasengan", "strike", "victory-voice", "defeat", "signs"] as const;
+export const SFX_CLIPS = ["charge", "fire", "lightning", "rasengan", "strike", "victory-voice", "defeat"] as const;
 export type ClipId = (typeof SFX_CLIPS)[number];
 
 export class Sfx {
@@ -44,15 +44,20 @@ export class Sfx {
     if (this.clipsRequested || !this.ctx) return;
     this.clipsRequested = true;
     const c = this.ctx;
-    for (const id of SFX_CLIPS) {
-      fetch(`/assets/sfx/${id}.mp3`)
-        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(r.status)))
-        .then((b) => c.decodeAudioData(b))
-        .then((buf) => this.clips.set(id, buf))
-        .catch(() => {
+    // Low priority: wait until the page (portraits, backgrounds, hand model) has loaded,
+    // then fetch the clips one by one so they never compete with what's on screen.
+    const load = async () => {
+      for (const id of SFX_CLIPS) {
+        try {
+          const r = await fetch(`/assets/sfx/${id}.mp3`);
+          if (!r.ok) continue;
+          this.clips.set(id, await c.decodeAudioData(await r.arrayBuffer()));
+        } catch {
           /* missing clip → synth fallback */
-        });
-    }
+        }
+      }
+    };
+    setTimeout(() => void load(), 3000);
   }
 
   /** Play a clip if it's loaded. Returns false so callers can fall back to synth. */
@@ -77,10 +82,7 @@ export class Sfx {
     return true;
   }
 
-  /** Countdown start: the hand-sign flurry clip. */
-  signs() {
-    this.clip("signs", { gain: 0.7, maxDur: 2.4 });
-  }
+
 
   setMuted(m: boolean) {
     this.muted = m;
