@@ -36,9 +36,14 @@ export interface Profile {
   /** Lifetime stats (shown in the profile card). */
   wins: number;
   duelsWon: number;
+  /** The one-time starter purse has been paid. */
+  starter: boolean;
 }
 
-export const defaultProfile = (): Profile => ({ nick: "", ryo: 0, upgrades: noUpgrades(), wins: 0, duelsWon: 0 });
+/** Every player starts with this much ryō. */
+export const STARTER_RYO = 3000;
+
+export const defaultProfile = (): Profile => ({ nick: "", ryo: 0, upgrades: noUpgrades(), wins: 0, duelsWon: 0, starter: false });
 
 export const MAX_NICK = 16;
 
@@ -66,6 +71,7 @@ export function sanitizeProfile(raw: unknown): Profile {
   p.ryo = typeof r.ryo === "number" && Number.isFinite(r.ryo) ? Math.max(0, Math.floor(r.ryo)) : 0;
   p.wins = typeof r.wins === "number" ? Math.max(0, Math.floor(r.wins)) : 0;
   p.duelsWon = typeof r.duelsWon === "number" ? Math.max(0, Math.floor(r.duelsWon)) : 0;
+  p.starter = r.starter === true;
   const u = (r.upgrades ?? {}) as Record<string, unknown>;
   for (const def of UPGRADES) {
     const v = u[def.id];
@@ -94,6 +100,11 @@ export function reward(o: { win: boolean; rank: Rank; mode: GameMode; chapter: n
   const chapterBonus = o.mode === "story" && o.chapter != null ? o.chapter * 20 : 0;
   const duel = o.mode === "duel" ? 150 : 0;
   return byRank[o.rank] + chapterBonus + duel + o.perfect * 15;
+}
+
+/** Pay the starter purse once — new players and profiles created before it existed. */
+export function withStarter(p: Profile): Profile {
+  return p.starter ? p : { ...p, ryo: p.ryo + STARTER_RYO, starter: true };
 }
 
 /** Ryō for mastering a new seal in the dojo. */

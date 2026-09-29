@@ -21,7 +21,7 @@ import { SIGNS } from "@/lib/vision/gestureDefinitions";
 import type { GestureRecognizer } from "@/lib/vision/gestureRecognizer";
 import { getLang, t as tt, tr } from "@/lib/i18n";
 import { CHAPTERS } from "./story";
-import { DOJO_REWARD, buy, defaultProfile, randomNick, reward, sanitizeProfile, cleanNick, type Profile, type UpgradeId } from "./profile";
+import { DOJO_REWARD, withStarter, buy, defaultProfile, randomNick, reward, sanitizeProfile, cleanNick, type Profile, type UpgradeId } from "./profile";
 import { hostLocal, hostPeer, joinLocal, joinPeer, newRoomCode, normalizeCode, type NetError, type NetMessage, type Transport } from "@/lib/net/transport";
 import type { CharacterId } from "./characters";
 import { CHARACTERS } from "./characters";
@@ -222,7 +222,7 @@ export class GameSession {
       /* fresh profile */
     }
     if (!p.nick) p.nick = randomNick();
-    this.setProfile(p);
+    this.setProfile(withStarter(p));
   }
   private setProfile(p: Profile) {
     this.profile = p;
