@@ -58,7 +58,7 @@ export class SyntheticHandSource implements HandSource {
     /* no camera */
   }
 
-  start(_video: HTMLVideoElement, onFrame: (f: RawFrame) => void) {
+  start(_video: HTMLVideoElement, onFrame: (f: RawFrame | null) => void) {
     const aspect = 16 / 9;
     let n = 0;
     this.timer = setInterval(() => {

@@ -36,7 +36,11 @@ export interface HandSource {
   /** Ask for camera permission and attach the stream to `video`. */
   openCamera(video: HTMLVideoElement): Promise<void>;
   /** Start producing frames. */
-  start(video: HTMLVideoElement, onFrame: (f: RawFrame) => void): void;
+  /**
+   * Start producing frames. When `detect()` returns false the model is skipped and
+   * `onFrame(null)` is called instead (video only) — used to save CPU/GPU in menus.
+   */
+  start(video: HTMLVideoElement, onFrame: (f: RawFrame | null) => void, detect?: () => boolean): void;
   stop(): void;
 }
 
@@ -109,7 +113,9 @@ export class MediaPipeHandSource implements HandSource {
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
-        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+        // 960×540 is plenty for the hand model (it works on ~224 px crops) and halves the
+        // per-frame upload / draw cost compared with 720p.
+        video: { facingMode: "user", width: { ideal: 960 }, height: { ideal: 540 }, frameRate: { ideal: 30 } },
       });
     } catch (e) {
       const name = (e as DOMException)?.name;
@@ -131,7 +137,7 @@ export class MediaPipeHandSource implements HandSource {
     }
   }
 
-  start(video: HTMLVideoElement, onFrame: (f: RawFrame) => void) {
+  start(video: HTMLVideoElement, onFrame: (f: RawFrame | null) => void, detect: () => boolean = () => true) {
     this.running = true;
     const loop = () => {
       if (!this.running) return;
@@ -141,6 +147,7 @@ export class MediaPipeHandSource implements HandSource {
       // Only run inference on NEW video frames.
       if (video.currentTime === this.lastVideoTime) return;
       this.lastVideoTime = video.currentTime;
+      if (!detect()) return onFrame(null);
       let ts = performance.now();
       if (ts <= this.lastTs) ts = this.lastTs + 1; // MediaPipe requires strictly increasing timestamps
       this.lastTs = ts;

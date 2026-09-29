@@ -3,6 +3,7 @@
  * The render loop only runs while something is alive, so it costs nothing at rest.
  */
 import type { Element } from "@/types/game";
+import { particleScale } from "@/lib/perf/quality";
 
 interface Particle {
   x: number;
@@ -66,7 +67,8 @@ export class FxEngine {
   }
 
   resize() {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    // Full-screen canvas: 1.5× is visually identical for glowing particles and ~45% cheaper than 2×.
+    const dpr = Math.min(1.5, window.devicePixelRatio || 1);
     this.W = window.innerWidth;
     this.H = window.innerHeight;
     this.canvas.width = this.W * dpr;
@@ -88,7 +90,7 @@ export class FxEngine {
   }
 
   burst(x: number, y: number, opts: { colors: string[]; count?: number; speed?: number; size?: number; life?: number; gravity?: number }) {
-    const n = opts.count ?? 40;
+    const n = Math.round((opts.count ?? 40) * particleScale());
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
       const sp = (opts.speed ?? 6) * (0.3 + Math.random());

@@ -7,6 +7,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { t, tr, type StrKey } from "@/lib/i18n";
 import { useLang } from "@/hooks/useLang";
 import { HandPictogram } from "./HandPictogram";
+import { particleScale } from "@/lib/perf/quality";
 import { LangToggle } from "./LangToggle";
 import { Portrait } from "./Portrait";
 
@@ -171,7 +172,7 @@ function Embers() {
       sway: Math.random() * Math.PI * 2,
       hue: Math.random() < 0.8 ? 18 + Math.random() * 20 : 200,
     });
-    const ps = Array.from({ length: reduce ? 20 : 90 }, () => spawn(true));
+    const ps = Array.from({ length: reduce ? 20 : Math.round(90 * particleScale()) }, () => spawn(true));
     const loop = () => {
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
       ctx.globalCompositeOperation = "lighter";

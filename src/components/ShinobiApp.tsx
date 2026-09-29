@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { initLang } from "@/lib/i18n";
+import { initQuality } from "@/lib/perf/quality";
 import { CHARACTER_LIST } from "@/lib/game/characters";
 import { SessionContext, useCreateSession } from "@/hooks/useGame";
 import { useSyncExternalStore } from "react";
@@ -15,12 +16,19 @@ export default function ShinobiApp() {
 
   useEffect(() => {
     initLang();
-    // Warm the cache with every portrait right away, so select screens never show empty cards.
-    for (const c of CHARACTER_LIST) {
-      const img = new Image();
-      img.decoding = "async";
-      img.src = c.image;
-    }
+    initQuality();
+    // Warm the cache with every portrait once the page is idle (after the title art and the
+    // hand model), so select screens never show empty cards and nothing competes with first paint.
+    const warm = () => {
+      for (const c of CHARACTER_LIST) {
+        const img = new Image();
+        img.decoding = "async";
+        img.src = c.image;
+      }
+    };
+    const w = window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
+    if (w.requestIdleCallback) w.requestIdleCallback(warm, { timeout: 2500 });
+    else setTimeout(warm, 1200);
     session.loadProgress();
     session.loadRecords();
     session.loadProfile();

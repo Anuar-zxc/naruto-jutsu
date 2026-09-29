@@ -285,6 +285,12 @@ export const STR = {
   statJutsu: { ru: "техник", en: "jutsu" },
   statChapters: { ru: "глав сюжета", en: "story chapters" },
   statOnline: { ru: "онлайн-дуэли", en: "online duels" },
+  tip1: { ru: "Свет спереди, а не сзади — камера лучше видит пальцы.", en: "Light in front of you, not behind — the camera sees fingers better." },
+  tip2: { ru: "Держи руки на уровне груди, ладонями к камере.", en: "Keep your hands at chest height, palms to the camera." },
+  tip3: { ru: "Идеальная техника без ошибок оглушает врага — он не ответит.", en: "A perfect jutsu stuns the enemy — it can't answer." },
+  tip4: { ru: "Щит Замены блокирует удар даже в онлайн-дуэли.", en: "Body Replacement's shield blocks hits even in online duels." },
+  tip5: { ru: "Трудная печать? Додзё — без таймера и с советами сенсея.", en: "Tricky seal? The Dojo has no timer and a sensei's advice." },
+  tip6: { ru: "Рё за бои тратятся в Лавке: сила, чакра, быстрые руки.", en: "Spend fight ryō in the Shop: power, chakra, quick hands." },
 } satisfies Record<string, L>;
 
 export type StrKey = keyof typeof STR;

@@ -6,6 +6,7 @@ import { useHandTracking } from "@/hooks/useHandTracking";
 import { FxEngine } from "@/lib/fx/fxEngine";
 import { trackFor } from "@/lib/audio/music";
 import { PhaseTransition } from "./PhaseTransition";
+import { reportFps } from "@/lib/perf/quality";
 import { JUTSU } from "@/lib/game/jutsu";
 import { CHARACTERS } from "@/lib/game/characters";
 import { TIMING } from "@/lib/game/session";
@@ -88,6 +89,9 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
   const [reply, setReply] = useState<string | null>(null);
   const [vs, setVs] = useState<number | null>(null);
   const [audioToast, setAudioToast] = useState<{ text: string; key: number } | null>(null);
+
+  // Auto quality: if tracking can't keep up, drop the heavy decorative effects.
+  useEffect(() => session.subscribeLive(() => reportFps(session.getLive().fps)), [session]);
 
   // --- setup ------------------------------------------------------------------
   useEffect(() => {
@@ -310,7 +314,12 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
   const location = locationFor(g);
 
   return (
-    <div ref={rootRef} className={`game ${enraged(g) && ["COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND"].includes(g.phase) ? "enraged" : ""}`} style={j ? { ["--el" as string]: j.color, ["--el-glow" as string]: j.glow } : undefined}>
+    <div
+      ref={rootRef}
+      className={`game ${enraged(g) && ["COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND"].includes(g.phase) ? "enraged" : ""} ${
+        g.mode !== "training" && g.playerHp > 0 && g.playerHp <= g.playerMaxHp * 0.3 && ["COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED"].includes(g.phase) ? "lowhp" : ""
+      }`}
+      style={j ? { ["--el" as string]: j.color, ["--el-glow" as string]: j.glow } : undefined}>
       <div className="game-bg">
         <ArenaBackdrop location={location} showName={false} />
       </div>

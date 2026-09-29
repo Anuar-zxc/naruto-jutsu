@@ -3598,3 +3598,86 @@ body::after {
 .ht-top { font-size: clamp(76px, 11.5vw, 190px); white-space: nowrap; }
 .ht-top { display: inline-block; width: max-content; max-width: none; padding-right: 0.06em; }
 .hero-title { display: flex; flex-direction: column; align-items: flex-start; }
+
+/* ==========================================================================
+   v11 · performance + small details
+   ========================================================================== */
+/* --- performance ---------------------------------------------------------- */
+/* grain is decoration: freeze it while playing (camera + canvases already repaint every frame) */
+body:has(.game)::after { animation: none; }
+/* HUD blur is invisible over a dark UI but costs a full-width blur each frame */
+.game .hud { backdrop-filter: none; }
+/* off-screen menu content doesn't need layout/paint until scrolled to */
+.seal-section, .chapter-arc { content-visibility: auto; contain-intrinsic-size: 1px 420px; }
+/* heavy animated layers get their own compositor layer */
+.leaves i, .ha-img, .mc-bg, .start-moon { will-change: transform; }
+/* adaptive low-quality mode (slow devices / low fps) */
+.lowfx body::after, .lowfx .leaves, .lowfx .start-fog, .lowfx .ha-ring { display: none; }
+.lowfx .select-overlay { backdrop-filter: none; background: rgba(6, 4, 9, 0.93); }
+.lowfx .btn.primary::after, .lowfx .btn.shine::after { animation: none; display: none; }
+.lowfx .game.enraged::after { animation: none; }
+.lowfx .mode-card.poster, .lowfx .chip-rage, .lowfx .start-moon { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+/* --- details ---------------------------------------------------------------- */
+/* shuriken cursor on desktop */
+@media (pointer: fine) {
+  body {
+    cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 100 100'><path d='M50 4 L58 42 L96 50 L58 58 L50 96 L42 58 L4 50 L42 42 Z' fill='%23ffc15e' stroke='%23120a00' stroke-width='5'/><circle cx='50' cy='50' r='8' fill='%23120a00'/></svg>") 14 14, auto;
+  }
+  button, a, [role="button"], .mode-card, .char-card, .chapter-card, .jutsu-card {
+    cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 100 100'><path d='M50 4 L58 42 L96 50 L58 58 L50 96 L42 58 L4 50 L42 42 Z' fill='%23e63946' stroke='%23fff' stroke-width='5'/><circle cx='50' cy='50' r='8' fill='%23fff'/></svg>") 15 15, pointer;
+  }
+  input { cursor: text; }
+}
+
+/* spinning shuriken loader + tips */
+.shuriken { fill: var(--gold); filter: drop-shadow(0 0 14px rgba(255, 193, 94, 0.7)); animation: shuriken 0.9s linear infinite; }
+.shuriken circle { fill: #120a00; }
+@keyframes shuriken { to { transform: rotate(360deg); } }
+.loading-tip { margin-top: 14px; max-width: 420px; padding: 8px 14px; border-radius: 10px; background: rgba(0, 0, 0, 0.45); border: 1px solid var(--line-2); font-weight: 700; font-size: 13px; color: #e8dfe8; animation: rise 0.4s ease-out both; }
+.loading-tip b { color: var(--red); font-family: var(--font-kanji); margin-right: 6px; }
+
+/* countdown: kanji numeral behind the digit */
+.countdown { position: relative; }
+.cd-kanji { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -52%); font-family: var(--font-kanji); font-weight: 900; font-size: 1.6em; color: rgba(230, 57, 70, 0.28); z-index: -1; }
+
+/* low chakra: heartbeat red edges */
+.game.lowhp::before {
+  content: ""; position: fixed; inset: 0; z-index: 29; pointer-events: none;
+  box-shadow: inset 0 0 120px 20px rgba(200, 0, 30, 0.55);
+  animation: heartbeat 1.1s ease-in-out infinite;
+}
+@keyframes heartbeat { 0%, 100% { opacity: 0.35; } 12% { opacity: 1; } 24% { opacity: 0.5; } 36% { opacity: 0.9; } }
+
+/* cards: 3D tilt + sheen on hover */
+.char-card, .jutsu-card, .chapter-card:not(.locked) { transform-style: preserve-3d; }
+.char-card:hover { transform: perspective(700px) rotateX(4deg) translateY(-4px); }
+.mode-card.poster::after, .jutsu-card::after {
+  content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.14) 48%, transparent 60%);
+  background-size: 250% 100%; background-position: 150% 0; transition: background-position 0.8s ease;
+}
+.mode-card.poster:hover::after, .jutsu-card:hover::after { background-position: -50% 0; }
+
+/* buttons: pressed glow + focus ring */
+.btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.btn.primary:active { box-shadow: 0 0 0 4px rgba(255, 193, 94, 0.25), 0 6px 20px -8px rgba(230, 57, 70, 0.9); }
+
+/* HUD: score digits tick, combo flame */
+.hud-v { font-variant-numeric: tabular-nums; }
+.hud-stat.combo.hot .hud-v { text-shadow: 0 0 12px #ff7a1a, 0 -4px 16px rgba(255, 60, 0, 0.6); animation: flame 0.6s ease-in-out infinite alternate; }
+@keyframes flame { to { text-shadow: 0 0 18px #ffb347, 0 -8px 22px rgba(255, 60, 0, 0.8); } }
+
+/* section titles: tiny kunai flourishes */
+.select-title::before, .select-title::after { content: none; }
+.arc-head::after { content: ""; flex: 1; height: 1px; margin-left: 10px; background: linear-gradient(90deg, rgba(255, 193, 94, 0.5), transparent); }
+
+/* tooltips on seal cards (native title is slow): show how-to on hover */
+.gallery-item { position: relative; }
+.gallery-item:hover { border-color: var(--gold); transform: translateY(-2px); }
+
+/* smoother scroll areas */
+.select-overlay { scroll-behavior: smooth; overscroll-behavior: contain; }

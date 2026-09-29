@@ -6,6 +6,11 @@ import { GestureRecognizer } from "@/lib/vision/gestureRecognizer";
 import { CameraError, MediaPipeHandSource, type CameraErrorKind, type HandSource } from "@/lib/vision/handTracker";
 import { SyntheticHandSource } from "@/lib/vision/syntheticSource";
 import { drawOverlay } from "@/lib/vision/overlayRenderer";
+import { extractFrame } from "@/lib/vision/gestureFeatures";
+import type { Phase } from "@/types/game";
+
+/** Phases where the camera image is visible AND hands matter. Elsewhere the model is paused. */
+const DETECT: Phase[] = ["CAMERA_CHECK", "READY", "COUNTDOWN", "PLAYING", "SUCCESS", "TRAINING"];
 import type { RecognitionFrame } from "@/types/gestures";
 
 export type TrackingStatus = "idle" | "loading" | "running" | "error";
@@ -47,7 +52,17 @@ export function useHandTracking({ session, active, synthetic, videoRef, canvasRe
         await Promise.all([source.init(), source.openCamera(video)]);
         if (cancelled) return;
         setStatus("running");
-        source.start(video, (raw) => {
+        let skip = 0;
+        source.start(
+          video,
+          (raw) => {
+          if (!raw) {
+            // Menus / banners: no inference; just keep the (dimmed) camera image alive at ~15 fps.
+            if (++skip % 2) return;
+            const canvas = canvasRef.current;
+            if (canvas && !synthetic) drawOverlay(canvas, video, extractFrame({ hands: [], aspect: video.videoWidth / video.videoHeight, t: performance.now() }), session.overlay, { hold: 0, holdTone: "neutral" });
+            return;
+          }
           const frame = rec.process(raw);
           lastFrame.current = frame;
           session.onFrame(frame);
@@ -61,7 +76,9 @@ export function useHandTracking({ session, active, synthetic, videoRef, canvasRe
               holdTone: "good",
             });
           }
-        });
+          },
+          () => DETECT.includes(session.getState().phase),
+        );
       } catch (e) {
         if (cancelled) return;
         source.stop();
