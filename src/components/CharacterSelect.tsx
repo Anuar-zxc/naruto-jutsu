@@ -18,6 +18,11 @@ export function CharacterSelect() {
   const choose = (id: CharacterId) => {
     session.sfx.unlock();
     session.sfx.select();
+    if (g.mode === "daily") {
+      const d = session.daily();
+      session.dispatch({ type: "SELECT_CHARACTER", id, bossId: d.foe === id ? randomBossFor(id) : d.foe, mutators: d.mutators });
+      return;
+    }
     session.dispatch({ type: "SELECT_CHARACTER", id, bossId: g.mode === "quick" || g.mode === "survival" ? randomBossFor(id) : undefined });
   };
 

@@ -17,6 +17,8 @@ import { Boss } from "./Boss";
 import { Announcer, BattleStage } from "./BattleStage";
 import { castJutsu, enemyStrike, point } from "@/lib/fx/jutsuAnim";
 import { HandCursor } from "./HandCursor";
+import { AchievementToasts } from "./Achievements";
+import { BoonPicker } from "./BoonPicker";
 import { ArenaBackdrop } from "./ArenaBackdrop";
 import { CharacterSelect } from "./CharacterSelect";
 import { ChapterSelect } from "./ChapterSelect";
@@ -547,7 +549,7 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
         </div>
       )}
       {g.phase === "WAVE_CLEAR" && g.survival && (
-        <div className="wave-banner" key={`w${g.survival.wave}`}>
+        <div className={`wave-banner ${g.survival.offer ? "with-boons" : ""}`} key={`w${g.survival.wave}`}>
           <div className="wb-title">{t("waveClear", { n: g.survival.wave })}</div>
           <div className="wb-reward">
             <span className="purse-coin">両</span> {t("waveReward", { n: g.survival.lastReward })}
@@ -561,6 +563,7 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
           </div>
         </div>
       )}
+      {g.phase === "WAVE_CLEAR" && <BoonPicker />}
       {g.phase === "NEXT_ROUND" && (
         <div className="round-banner" key={g.round}>
           {t("round")} {g.round + 1}
@@ -603,6 +606,7 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
       <div ref={layerRef} className="jfx-layer" aria-hidden />
       <canvas ref={fxCanvas} className="fx-canvas" aria-hidden />
       <HandCursor />
+      <AchievementToasts />
     </div>
   );
 }

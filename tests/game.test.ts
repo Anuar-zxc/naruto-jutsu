@@ -291,6 +291,46 @@ async function main() {
     assert.equal(loud.shout, false, "one shout per cast");
   });
 
+  await test("daily challenge: same modifiers for the same date; modifiers change the fight; boons apply", async () => {
+    const { dailyFor, combine } = await import("../src/lib/game/mutators");
+    const { ACHIEVEMENTS, emptyCounters, isDone } = await import("../src/lib/game/achievements");
+    const a = dailyFor("2026-09-30");
+    assert.deepEqual(a, dailyFor("2026-09-30"), "deterministic");
+    assert.equal(a.mutators.length, 2);
+    assert.notEqual(a.mutators[0], a.mutators[1]);
+    for (let d = 1; d <= 28; d++) {
+      const x = dailyFor(`2026-10-${String(d).padStart(2, "0")}`);
+      assert.ok(x.mutators.filter((m) => combine([m]).elements).length <= 1, "never two element locks");
+    }
+    let s = reduce(menu(), { type: "SELECT_MODE", mode: "daily" }, { type: "SELECT_CHARACTER", id: "gaara", bossId: "itachi", mutators: ["fire", "glass"] });
+    assert.deepEqual(availableJutsu(s), ["GOKAKYU", "RYUKA", "HOSENKA"], "fire only");
+    assert.equal(s.playerMaxHp, PLAYER_MAX_HP / 2, "glass cannon halves chakra");
+    const g2 = reduce(menu(), { type: "SELECT_MODE", mode: "daily" }, { type: "SELECT_CHARACTER", id: "gaara", bossId: "itachi", mutators: ["giant", "sage"] });
+    assert.equal(g2.bossMaxHp, 2100);
+    assert.equal(g2.sage, SAGE_MAX);
+    // Survival boons.
+    let sv = reduce(menu(), { type: "SELECT_MODE", mode: "survival" }, { type: "SELECT_CHARACTER", id: "naruto", bossId: "hidan" });
+    sv = reduce(sv, { type: "TOGGLE_LOADOUT", id: "RASENGAN" }, { type: "TOGGLE_LOADOUT", id: "CHIDORI" }, { type: "TOGGLE_LOADOUT", id: "KIRIN" }, { type: "CONFIRM_LOADOUT" });
+    let guard = 0;
+    while (sv.phase !== "WAVE_CLEAR" && guard++ < 30) {
+      sv = reduce(cast(sv, sv.jutsuId!), { type: "CAST_DONE" });
+      if (sv.phase === "NEXT_ROUND") sv = reduce(sv, { type: "NEXT_ROUND_DONE" });
+    }
+    const offer = sv.survival!.offer!;
+    assert.equal(offer.length, 3);
+    assert.equal(new Set(offer).size, 3);
+    const picked = reduce(sv, { type: "PICK_BOON", id: offer[0] });
+    assert.equal(picked.survival!.offer, null);
+    assert.deepEqual(picked.survival!.boons, [offer[0]]);
+    assert.equal(reduce(picked, { type: "PICK_BOON", id: offer[1] }), picked, "only one pick per wave");
+    // Achievements are data-driven and reachable.
+    assert.ok(ACHIEVEMENTS.length >= 35);
+    assert.equal(new Set(ACHIEVEMENTS.map((x) => x.id)).size, ACHIEVEMENTS.length);
+    const c = { ...emptyCounters(), wins: 1 };
+    assert.ok(isDone(ACHIEVEMENTS.find((x) => x.id === "first_blood")!, c));
+    assert.ok(!isDone(ACHIEVEMENTS.find((x) => x.id === "wins_10")!, c));
+  });
+
   await test("survival: waves never end, each pays ryō, heals a little and brings a new enemy; boss every 5th", () => {
     let s = reduce(menu(), { type: "SELECT_MODE", mode: "survival" }, { type: "SELECT_CHARACTER", id: "naruto", bossId: "hidan" });
     assert.equal(s.phase, "JUTSU_SELECTION");

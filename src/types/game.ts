@@ -1,3 +1,4 @@
+import type { BoonId, MutatorId } from "@/lib/game/mutators";
 import type { SignId } from "./gestures";
 import type { CharacterId } from "@/lib/game/characters";
 import type { L } from "./i18n";
@@ -62,7 +63,7 @@ export interface RoundReport {
   healed: number;
   id: number;
 }
-export type GameMode = "story" | "quick" | "training" | "duel" | "survival";
+export type GameMode = "story" | "quick" | "training" | "duel" | "survival" | "daily";
 
 export interface Jutsu {
   id: JutsuId;
@@ -136,7 +137,21 @@ export interface GameState {
   /** Chakra lost to the last wrong seal (for the UI). */
   lastMistakeCost: { hp: number; ms: number; id: number } | null;
   /** Endless survival: current wave and the ryō banked so far this run. */
-  survival: { wave: number; earned: number; lastReward: number; healed: number } | null;
+  survival: {
+    wave: number;
+    earned: number;
+    lastReward: number;
+    healed: number;
+    /** Boons offered after the wave just cleared (null once one is picked). */
+    offer: BoonId[] | null;
+    boons: BoonId[];
+    dmgBonus: number;
+    timeBonusMs: number;
+    rewardMult: number;
+    focusMult: number;
+  } | null;
+  /** Active fight modifiers (Daily Challenge). */
+  mutators: MutatorId[];
   /** Dojo (training mode): current target seal, streak and mastered seals. */
   training: { sign: SignId; streak: number; mastered: SignId[]; hits: number } | null;
   jutsuId: JutsuId | null;
@@ -167,7 +182,8 @@ export type GameAction =
   | { type: "STORY_OUTRO" }
   | { type: "BACK_TO_CHAPTERS" }
   | { type: "BACK_TO_MENU" }
-  | { type: "SELECT_CHARACTER"; id: CharacterId; bossId?: CharacterId }
+  | { type: "SELECT_CHARACTER"; id: CharacterId; bossId?: CharacterId; mutators?: MutatorId[] }
+  | { type: "PICK_BOON"; id: BoonId }
   | { type: "CHANGE_CHARACTER" }
   | { type: "SELECT_JUTSU"; id: JutsuId }
   | { type: "TOGGLE_LOADOUT"; id: JutsuId }

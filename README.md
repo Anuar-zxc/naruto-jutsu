@@ -118,6 +118,12 @@ Zodiac sequences come from fan seal guides for the series (sources vary on some)
 - Every jutsu has its own animation: Rasengan dash and spiral, Chidori crackle-dash-pierce, Great Fireball, Dragon Flame jet, Phoenix Flower volley, Water Dragon, Shadow Clones rushing in, a summoned toad stomp, substitution log, the fūma-shuriken transformation, Kirin from the sky and the Rasenshuriken dome.
 - The enemy lunges across the stage to counter-attack; hits knock fighters back.
 
+## Achievements, Daily Challenge, survival boons
+
+- **40 achievements** in five groups (battle, mastery, story, survival, shinobi world) — flawless wins, clutch wins, 30-seal combos, sage casts, shouts, all Akatsuki beaten, every Ōtsutsuki… Each pays ryō once; a gold toast pops up the moment one unlocks. Progress bars show how close you are.
+- **Daily Challenge (日課):** the same for everyone on a given date — one villain and two of ten modifiers (Haste, Berserk, Giant, Glass Cannon, Fire/Lightning/Chakra only, Absolute Precision, Sage's Blessing, Mist). Harder modifiers raise the prize; the big prize is paid on the first win of the day.
+- **Survival boons:** after every wave pick one of three blessings for the rest of the run — Uzumaki Blood, Sennin Power, Ancestral Guard, Bloodlust, Quick Hands, Medical Ninjutsu, Greed, Cold Focus.
+
 ## Sage gauge, shouting and the battle card
 
 - **Sage gauge (仙)** under your health bar: every clean seal, every perfect jutsu and every hit you take charges it; a wrong seal drains it. When it's full your fighter glows gold, an anime cut-in sweeps across the screen and the next jutsu hits ×1.6.

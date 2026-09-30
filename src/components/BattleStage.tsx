@@ -8,6 +8,7 @@ import { CHARACTERS } from "@/lib/game/characters";
 import type { Location } from "@/lib/game/locations";
 import { t, tr } from "@/lib/i18n";
 import { SAGE_MAX, isBossWave } from "@/lib/game/gameState";
+import { MUTATORS } from "@/lib/game/mutators";
 import { ArenaBackdrop } from "./ArenaBackdrop";
 import { Portrait } from "./Portrait";
 
@@ -76,6 +77,15 @@ export const BattleStage = forwardRef<HTMLDivElement, Props>(function BattleStag
           </div>
         </div>
         <div className={`mk-clock ${urgent ? "urgent" : ""}`}>
+          {g.mutators.length > 0 && (
+            <div className="mk-mods">
+              {g.mutators.map((id) => (
+                <span key={id} title={tr(MUTATORS[id].desc)}>
+                  {MUTATORS[id].kanji} {tr(MUTATORS[id].name)}
+                </span>
+              ))}
+            </div>
+          )}
           <b key={String(clock)}>{clock}</b>
           <span>
             {g.mode === "survival" && g.survival ? `${t("wave")} ${g.survival.wave}` : `${t("round")} ${g.round}`}

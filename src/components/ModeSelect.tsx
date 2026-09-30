@@ -3,12 +3,15 @@
 import { useSession } from "@/hooks/useGame";
 import { useProfile } from "@/hooks/useProfile";
 import { useLang } from "@/hooks/useLang";
-import { t } from "@/lib/i18n";
 import { SIGN_LIST } from "@/lib/vision/gestureDefinitions";
 import { useEffect, useState } from "react";
 import type { GameMode } from "@/types/game";
 import { CHARACTERS, type CharacterId } from "@/lib/game/characters";
 import { Portrait } from "./Portrait";
+import { Achievements } from "./Achievements";
+import { ACHIEVEMENTS } from "@/lib/game/achievements";
+import { MUTATORS } from "@/lib/game/mutators";
+import { t, tr } from "@/lib/i18n";
 
 interface Entry {
   id: string;
@@ -36,6 +39,10 @@ export function ModeSelect() {
   const [bestWave, setBestWave] = useState(0);
   const [mastered, setMastered] = useState(0);
   const [sel, setSel] = useState(0);
+  const [showAch, setShowAch] = useState(false);
+  const daily = session.daily();
+  const dailyDone = session.dailyDone();
+  const achDone = ACHIEVEMENTS.filter((a) => session.isUnlocked(a.id)).length;
 
   useEffect(() => {
     setBest(session.getRecords().quick?.score ?? null);
@@ -58,8 +65,35 @@ export function ModeSelect() {
     { id: "story", kanji: "物語", title: t("storyTitle"), tag: t("tagStory"), desc: t("storyDesc"), bg: bg("valley"), hero: "naruto-six-paths", accent: "#ff4d5e", go: () => pick("story") },
     { id: "quick", kanji: "決闘", title: t("quickTitle"), tag: t("tagQuick"), desc: t("quickDesc"), meta: best != null ? t("bestScore", { n: best.toLocaleString("en-US") }) : undefined, bg: bg("war"), hero: "sasuke", accent: "#2ec5ff", go: () => pick("quick") },
     { id: "survival", kanji: "生存", title: t("survivalTitle"), tag: t("tagSurvival"), desc: t("survivalDesc"), meta: bestWave > 0 ? t("survivalBest", { n: bestWave }) : undefined, bg: bg("redmoon"), hero: "might-guy", accent: "#ff8a1f", go: () => pick("survival") },
+    {
+      id: "daily",
+      kanji: "日課",
+      title: t("dailyTitle"),
+      tag: t("tagDaily"),
+      desc: t("dailyDesc", { foe: tr(CHARACTERS[daily.foe].name), mods: daily.mutators.map((m) => `${MUTATORS[m].kanji} ${tr(MUTATORS[m].name)} (${tr(MUTATORS[m].desc)})`).join(", "), n: daily.reward }),
+      meta: dailyDone ? t("dailyDone") : `両 ${daily.reward}`,
+      bg: bg("summit"),
+      hero: daily.foe,
+      accent: "#ff3d6e",
+      go: () => pick("daily"),
+    },
     { id: "duel", kanji: "対戦", title: t("duelTitle"), tag: t("tagDuel"), desc: t("duelDesc"), bg: bg("arena"), hero: "itachi", accent: "#a970ff", go: () => pick("duel") },
     { id: "training", kanji: "修行", title: t("dojoTitle"), tag: t("tagDojo"), desc: t("dojoDesc"), meta: t("dojoMastered", { m: mastered, n: SIGN_LIST.length }), bg: bg("canyon"), hero: "kakashi", accent: "#ffc15e", go: () => pick("training") },
+    {
+      id: "achievements",
+      kanji: "実績",
+      title: t("achTitle"),
+      tag: t("tagAch"),
+      desc: t("achDesc", { n: achDone, m: ACHIEVEMENTS.length }),
+      meta: `🏆 ${achDone} / ${ACHIEVEMENTS.length}`,
+      bg: bg("konohanight"),
+      hero: "hiruzen",
+      accent: "#ffd166",
+      go: () => {
+        session.sfx.select();
+        setShowAch(true);
+      },
+    },
     {
       id: "shop",
       kanji: "店",
@@ -87,6 +121,7 @@ export function ModeSelect() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (showAch) return;
       if (e.key === "ArrowDown" || e.key === "s") setSel((i) => (i + 1) % entries.length);
       else if (e.key === "ArrowUp" || e.key === "w") setSel((i) => (i - 1 + entries.length) % entries.length);
       else if (e.key === "Enter") entries[sel].go();
@@ -99,6 +134,7 @@ export function ModeSelect() {
 
   return (
     <div className="select-overlay main-menu" style={{ ["--accent" as string]: cur.accent }}>
+      {showAch && <Achievements onClose={() => setShowAch(false)} />}
       {/* The highlighted mode's location fills the screen. */}
       <div className="mm-bg">
         {entries.map((e, i) => (
@@ -110,7 +146,7 @@ export function ModeSelect() {
       <div className="mm-left">
         <div className="mm-head">
           <div className="mm-title">{t("chooseMode")}</div>
-          <button className="mm-player" onClick={entries[5].go} title={t("shopTitle")}>
+          <button className="mm-player" onClick={() => entries.find((e) => e.id === "shop")!.go()} title={t("shopTitle")}>
             <b>{profile.nick}</b>
             <span className="purse-coin">両</span>
             <em>{profile.ryo.toLocaleString("en-US")}</em>
@@ -153,7 +189,7 @@ export function ModeSelect() {
           <div className="mm-card-foot">
             {cur.meta && <span className="mm-meta">{cur.meta}</span>}
             <button className="btn primary mm-go" onClick={cur.go} data-action="mode-go">
-              {cur.id === "shop" ? t("enterShop") : t("playCta")} ▸
+              {cur.id === "shop" ? t("enterShop") : cur.id === "achievements" ? t("achOpen") : t("playCta")} ▸
             </button>
           </div>
         </div>

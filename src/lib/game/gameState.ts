@@ -18,6 +18,7 @@ import { CHARACTERS, bossFor, damageMultiplier, mentorFor } from "./characters";
 import { CHAPTERS, jutsuForChapter, linesFor } from "./story";
 import { LOCATIONS, QUICK_ROTATION, type Location } from "./locations";
 import { focusMult, hpMult, noUpgrades, powerMult, speedBonusMs, startShields } from "./profile";
+import { DAILY_HP, boonOffer, combine, type BoonId } from "./mutators";
 
 /** Online duel: both players start with this much chakra (×10 the solo scale). */
 export const DUEL_HP = 1000;
@@ -86,6 +87,7 @@ export const initialGameState = (): GameState => ({
   duel: null,
   training: null,
   survival: null,
+  mutators: [],
   jutsuId: null,
   seqIndex: 0,
   timeLeftMs: 0,
@@ -142,6 +144,7 @@ const ALLOWED: Record<GameAction["type"], Phase[]> = {
   REMOTE_HP: [...DUEL_FIGHT, "LOBBY"],
   DUEL_RESULT: [...DUEL_FIGHT, "DEFEAT", "VICTORY"],
   NEXT_WAVE: ["WAVE_CLEAR"],
+  PICK_BOON: ["WAVE_CLEAR"],
   SHOUT: ["COUNTDOWN", "PLAYING", "SUCCESS"],
   TRAIN_SELECT: ["TRAINING"],
   TRAIN_HIT: ["TRAINING"],
@@ -171,7 +174,9 @@ export const enraged = (s: GameState) => s.bossHp > 0 && s.bossHp <= s.bossMaxHp
 /** Jutsu time limit including the hero's perk (and 15% less while the enemy rages). */
 export function timeLimit(s: GameState, base: number): number {
   const bonus = s.characterId ? CHARACTERS[s.characterId].timeBonusMs : 0;
-  return Math.max(5000, Math.round((base + bonus + speedBonusMs(s.upgrades)) * (enraged(s) && s.mode !== "duel" ? 0.85 : 1)));
+  const run = s.survival?.timeBonusMs ?? 0;
+  const mod = combine(s.mutators).timeMult;
+  return Math.max(4000, Math.round((base + bonus + run + speedBonusMs(s.upgrades)) * mod * (enraged(s) && s.mode !== "duel" ? 0.85 : 1)));
 }
 
 /** Chakra a wrong seal costs (grows through the story). */
@@ -181,7 +186,7 @@ export function mistakeCost(s: GameState): number {
   if (s.mode === "story" && s.chapter != null) base = 6 + Math.round((s.chapter / Math.max(1, CHAPTERS.length - 1)) * 6);
   base *= CHAKRA_SCALE;
   if (s.mode === "duel") base = 60;
-  return Math.max(1, Math.round(base * focusMult(s.upgrades)));
+  return Math.max(1, Math.round(base * focusMult(s.upgrades) * combine(s.mutators).mistakeMult * (s.survival?.focusMult ?? 1)));
 }
 
 /** Chakra numbers (heal, recoil) scale with the mode: duels run on 1000 chakra. */
@@ -206,7 +211,9 @@ function enemyHits(s: GameState, amount: number): { s: GameState; taken: number;
 
 /** Jutsu the player may choose right now. */
 export function availableJutsu(s: GameState): JutsuId[] {
-  return s.mode === "story" && s.chapter != null ? jutsuForChapter(s.chapter) : JUTSU_ORDER;
+  const base = s.mode === "story" && s.chapter != null ? jutsuForChapter(s.chapter) : JUTSU_ORDER;
+  const only = combine(s.mutators).elements;
+  return only ? base.filter((id) => only.includes(JUTSU[id].element)) : base;
 }
 
 /** Where the current fight takes place. */
@@ -229,12 +236,13 @@ export function enemyAttack(s: GameState): number {
     const w = s.survival.wave;
     base = Math.min(72, 24 + Math.round(w * 2.5)) * (isBossWave(w) ? 1.2 : 1);
   }
-  return Math.round(base * CHAKRA_SCALE * (enraged(s) ? RAGE_MULT : 1));
+  return Math.round(base * CHAKRA_SCALE * combine(s.mutators).enemyDmgMult * (enraged(s) ? RAGE_MULT : 1));
 }
 
 function startFight(s: GameState): GameState {
   const heroChakra = (s.characterId && CHARACTERS[s.characterId].chakraMult) || 1;
-  const maxHp = Math.round((s.mode === "duel" ? DUEL_HP : PLAYER_MAX_HP) * hpMult(s.upgrades) * heroChakra);
+  const mods = combine(s.mutators);
+  const maxHp = Math.round((s.mode === "duel" ? DUEL_HP : PLAYER_MAX_HP) * hpMult(s.upgrades) * heroChakra * mods.playerHpMult);
   return {
     ...s,
     phase: "JUTSU_SELECTION",
@@ -247,7 +255,7 @@ function startFight(s: GameState): GameState {
     lastMistakeCost: null,
     duel: s.duel ? { ...s.duel, ready: false } : null,
     status: { ...emptyStatus(), shield: startShields(s.upgrades) },
-    sage: 0,
+    sage: mods.sageStart ? SAGE_MAX : 0,
     slot: 0,
     // Keep the previous picks (handy for a rematch) if they're still available.
     loadout: s.loadout.filter((id) => availableJutsu(s).includes(id)).slice(0, LOADOUT_SIZE),
@@ -264,10 +272,45 @@ function endDialogue(s: GameState): GameState {
   return { ...s, phase: "CHAPTER_SELECT", dialogue: null };
 }
 
+const freshRun = (): NonNullable<GameState["survival"]> => ({ wave: 1, earned: 0, lastReward: 0, healed: 0, offer: null, boons: [], dmgBonus: 0, timeBonusMs: 0, rewardMult: 1, focusMult: 1 });
+
+/** Survival: apply the boon picked after a wave. */
+function applyBoon(s: GameState, id: BoonId): GameState {
+  const sv = { ...s.survival!, offer: null, boons: [...s.survival!.boons, id] };
+  let st: GameState = { ...s, survival: sv, eventId: s.eventId + 1 };
+  switch (id) {
+    case "uzumaki":
+      st = { ...st, playerMaxHp: st.playerMaxHp + 200, playerHp: st.playerHp + 200 };
+      break;
+    case "sennin":
+      st = { ...st, sage: addSage(st.sage, 60) };
+      break;
+    case "ancestors":
+      st = { ...st, status: { ...st.status, shield: st.status.shield + 2 } };
+      break;
+    case "bloodlust":
+      sv.dmgBonus += 0.12;
+      break;
+    case "quickhands":
+      sv.timeBonusMs += 1500;
+      break;
+    case "medic":
+      st = { ...st, playerHp: Math.min(st.playerMaxHp, st.playerHp + Math.round(st.playerMaxHp * 0.4)) };
+      break;
+    case "greed":
+      sv.rewardMult += 0.3;
+      break;
+    case "focus":
+      sv.focusMult *= 0.6;
+      break;
+  }
+  return st;
+}
+
 /** Survival: the wave's enemy is down — bank the ryō, restore some chakra, wait for the next one. */
 function clearWave(s: GameState): GameState {
   const sv = s.survival!;
-  const reward = waveReward(sv.wave);
+  const reward = Math.round(waveReward(sv.wave) * sv.rewardMult);
   const heal = Math.min(s.playerMaxHp - s.playerHp, waveHeal(sv.wave, s.playerMaxHp));
   const shield = isBossWave(sv.wave) ? 1 : 0;
   return {
@@ -276,7 +319,7 @@ function clearWave(s: GameState): GameState {
     bossHp: 0,
     playerHp: s.playerHp + heal,
     status: { ...s.status, shield: s.status.shield + shield },
-    survival: { ...sv, earned: sv.earned + reward, lastReward: reward, healed: heal },
+    survival: { ...sv, earned: sv.earned + reward, lastReward: reward, healed: heal, offer: boonOffer(sv.wave, s.eventId) },
     eventId: s.eventId + 1,
   };
 }
@@ -334,7 +377,7 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
 
     case "SELECT_MODE":
       if (a.mode === "training") return { ...s, mode: "training", phase: "TRAINING", training: { sign: "RAT", streak: 0, hits: 0, mastered: [] } };
-      return { ...s, mode: a.mode, phase: "CHARACTER_SELECT" };
+      return { ...s, mode: a.mode, phase: "CHARACTER_SELECT", mutators: [], survival: null };
 
     case "TRAIN_SELECT":
       return { ...s, training: { ...s.training!, sign: a.sign, streak: 0 } };
@@ -351,7 +394,12 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
       if (s.mode === "duel") return { ...s, characterId: a.id, phase: "LOBBY", duel: null };
       if (s.mode === "survival") {
         const hp = waveHp(1);
-        return startFight({ ...s, characterId: a.id, bossId: a.bossId ?? bossFor(a.id), bossHp: hp, bossMaxHp: hp, survival: { wave: 1, earned: 0, lastReward: 0, healed: 0 } });
+        return startFight({ ...s, characterId: a.id, bossId: a.bossId ?? bossFor(a.id), bossHp: hp, bossMaxHp: hp, mutators: [], survival: freshRun() });
+      }
+      if (s.mode === "daily") {
+        const mutators = a.mutators ?? [];
+        const hp = Math.round(DAILY_HP * combine(mutators).enemyHpMult);
+        return startFight({ ...s, characterId: a.id, bossId: a.bossId ?? bossFor(a.id), bossHp: hp, bossMaxHp: hp, mutators });
       }
       return startFight({ ...s, characterId: a.id, bossId: a.bossId ?? bossFor(a.id), bossHp: BOSS.maxHp, bossMaxHp: BOSS.maxHp });
 
@@ -502,6 +550,7 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
       let mult = damageMultiplier(hero, j.element) * powerMult(s.upgrades);
       let status = { ...s.status };
       let playerHp = s.playerHp;
+      mult *= combine(s.mutators).playerDmgMult * (1 + (s.survival?.dmgBonus ?? 0));
       if (s.shout) {
         mult *= SHOUT_MULT;
         tags.push("shout");
@@ -623,6 +672,10 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
       // "Next jutsu": move on to the next of the three.
       return startRound(s, s.slot + 1);
 
+    case "PICK_BOON":
+      if (!s.survival?.offer?.includes(a.id)) return s;
+      return applyBoon(s, a.id);
+
     case "SHOUT":
       if (!s.jutsuId || s.shout) return s;
       return { ...s, shout: true, eventId: s.eventId + 1 };
@@ -641,7 +694,7 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
     case "RESTART":
       if (s.mode === "survival") {
         const hp = waveHp(1);
-        return startFight({ ...s, bossHp: hp, bossMaxHp: hp, survival: { wave: 1, earned: 0, lastReward: 0, healed: 0 }, eventId: s.eventId + 1 });
+        return startFight({ ...s, bossHp: hp, bossMaxHp: hp, survival: freshRun(), eventId: s.eventId + 1 });
       }
       return startFight({ ...s, bossHp: s.bossMaxHp, eventId: s.eventId + 1 });
 

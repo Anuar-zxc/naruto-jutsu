@@ -13,6 +13,7 @@ import { t, tr } from "@/lib/i18n";
 import type { JutsuId } from "@/types/game";
 import { Portrait } from "./Portrait";
 import { useDuel } from "@/hooks/useProfile";
+import { MUTATORS } from "@/lib/game/mutators";
 
 /**
  * Loadout screen — shown ONCE at the start of a fight. The player picks three
@@ -68,6 +69,16 @@ export function JutsuSelect() {
           </div>
         )}
         {need === 3 ? t("loadoutTitle") : t("loadoutTitleN", { n: need })}
+        {g.mutators.length > 0 && (
+          <div className="loadout-mods">
+            {t("modsLabel")}:{" "}
+            {g.mutators.map((id) => (
+              <span key={id}>
+                <b>{MUTATORS[id].kanji}</b> {tr(MUTATORS[id].name)} — {tr(MUTATORS[id].desc)}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="loadout-slots">

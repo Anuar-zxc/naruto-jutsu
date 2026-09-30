@@ -33,6 +33,7 @@ export default function ShinobiApp() {
     session.loadRecords();
     session.loadSurvivalBest();
     session.loadProfile();
+    session.loadAchievements();
     // Tell the duel opponent we're gone when the tab closes.
     const bye = () => session.leaveRoom();
     window.addEventListener("pagehide", bye);

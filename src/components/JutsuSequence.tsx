@@ -7,6 +7,7 @@ import { timeLimit } from "@/lib/game/gameState";
 import { SIGNS } from "@/lib/vision/gestureDefinitions";
 import { tr } from "@/lib/i18n";
 import { HandPictogram } from "./HandPictogram";
+import { combine } from "@/lib/game/mutators";
 
 /** Sequence strip: ✓ done · → current (with hold progress) · ○ pending, plus the timer. */
 export function JutsuSequence() {
@@ -15,6 +16,7 @@ export function JutsuSequence() {
   const live = useLive();
   if (!g.jutsuId) return null;
   const j = JUTSU[g.jutsuId];
+  const fog = combine(g.mutators).hidePictograms;
   const active = g.phase === "PLAYING" || g.phase === "COUNTDOWN";
   const secs = g.timeLeftMs / 1000;
   const urgent = g.phase === "PLAYING" && secs <= 5;
@@ -42,7 +44,7 @@ export function JutsuSequence() {
               <div className="seal-step">{done ? "✓" : current ? "→" : "○"}</div>
               <div className="seal-kanji">{def.kanji}</div>
               <div className="seal-name">{tr(def.name).toUpperCase()}</div>
-              <HandPictogram def={def} size={62} />
+              {fog ? <div className="seal-fog">?</div> : <HandPictogram def={def} size={62} />}
               {current && <div className="seal-hold" style={{ transform: `scaleX(${hold})` }} />}
             </div>
           );

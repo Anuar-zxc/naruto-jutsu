@@ -25,6 +25,9 @@ import { DOJO_REWARD, withStarter, buy, defaultProfile, randomNick, reward, sani
 import { hostLocal, hostPeer, joinLocal, joinPeer, newRoomCode, normalizeCode, type NetError, type NetMessage, type Transport } from "@/lib/net/transport";
 import type { CharacterId } from "./characters";
 import { CHARACTERS, survivalBossFor } from "./characters";
+import { ACHIEVEMENTS, emptyCounters, isDone, type Achievement, type Counters } from "./achievements";
+import { dailyFor, todayKey } from "./mutators";
+import { UPGRADES } from "./profile";
 
 const LS_PROFILE = "shinobi.profile";
 
@@ -45,6 +48,9 @@ const IDLE_DUEL: DuelUi = { status: "idle", code: "", error: null, opponent: nul
 const LS_PROGRESS = "shinobi.progress.v2";
 const LS_PROGRESS_V1 = "shinobi.progress";
 const LS_SURVIVAL = "shinobi.survival.best";
+const LS_COUNTERS = "shinobi.counters";
+const LS_ACH = "shinobi.achievements";
+const LS_DAILY = "shinobi.daily.won";
 const V1_CHAPTERS = 13;
 const LS_RECORDS = "shinobi.records";
 const LS_DOJO = "shinobi.dojo";
@@ -98,6 +104,8 @@ export const TIMING = {
   nextRound: 2300,
   /** Survival: pause between waves (banner + reward). */
   waveBreak: 3400,
+  /** Survival: a boon is picked for you if you don't choose within this time. */
+  boonAutoPick: 20000,
   /** Extra time a wrong seal must be held (after recognition) before it counts as a mistake. */
   wrongHold: 350,
   /** How long a counted mistake stays on screen. */
@@ -172,6 +180,7 @@ export class GameSession {
       /* storage unavailable */
     }
     this.progressSubs.forEach((f) => f());
+    this.bump((c) => (c.storyCleared = Math.max(c.storyCleared, this.progress)));
   }
   resetProgress() {
     this.progress = 0;
@@ -197,6 +206,7 @@ export class GameSession {
   }
   private recordKey(s: GameState) {
     if (s.mode === "duel") return "duel";
+    if (s.mode === "daily") return `daily:${todayKey()}`;
     return s.mode === "story" && s.chapter != null ? `story:${s.chapter}` : "quick";
   }
   private commitRecord(s: GameState): RecordResult {
@@ -214,6 +224,102 @@ export class GameSession {
     }
     return { key, best: prev, isNew };
   }
+
+  // --- achievements -------------------------------------------------------------
+  private counters: Counters = emptyCounters();
+  private unlocked = new Set<string>();
+  private achSubs = new Set<() => void>();
+  /** Recently unlocked (for toasts): newest last. */
+  achToasts: { ach: Achievement; key: number }[] = [];
+  private achVersion = 0;
+  getAchVersion = () => this.achVersion;
+  subscribeAch = (fn: () => void) => {
+    this.achSubs.add(fn);
+    return () => this.achSubs.delete(fn);
+  };
+  getCounters = () => this.counters;
+  isUnlocked = (id: string) => this.unlocked.has(id);
+  loadAchievements() {
+    try {
+      const c = JSON.parse(localStorage.getItem(LS_COUNTERS) ?? "null");
+      if (c && typeof c === "object") this.counters = { ...emptyCounters(), ...c };
+      const u = JSON.parse(localStorage.getItem(LS_ACH) ?? "[]");
+      if (Array.isArray(u)) this.unlocked = new Set(u.filter((x) => typeof x === "string"));
+    } catch {
+      /* fresh */
+    }
+    // Credit what the player already did before achievements existed.
+    this.loadDojo();
+    this.bump((c) => {
+      c.storyCleared = Math.max(c.storyCleared, this.progress);
+      c.dojoMastered = Math.max(c.dojoMastered, this.dojoMastered.length);
+      c.bestWave = Math.max(c.bestWave, this.survivalBest.wave);
+      c.wins = Math.max(c.wins, this.profile.wins);
+      c.duelWins = Math.max(c.duelWins, this.profile.duelsWon);
+      c.maxRyo = Math.max(c.maxRyo, this.profile.ryo);
+    });
+  }
+  /** Update lifetime counters, persist, and unlock whatever became true. */
+  private bump(fn: (c: Counters) => void) {
+    const c = { ...this.counters, winsWith: [...this.counters.winsWith], beaten: [...this.counters.beaten] };
+    fn(c);
+    this.counters = c;
+    try {
+      localStorage.setItem(LS_COUNTERS, JSON.stringify(c));
+    } catch {
+      /* storage unavailable */
+    }
+    let gained = 0;
+    for (const a of ACHIEVEMENTS) {
+      if (this.unlocked.has(a.id) || !isDone(a, c)) continue;
+      this.unlocked.add(a.id);
+      gained += a.reward;
+      this.achToasts = [...this.achToasts.slice(-4), { ach: a, key: Date.now() + Math.random() }];
+    }
+    if (gained) {
+      try {
+        localStorage.setItem(LS_ACH, JSON.stringify([...this.unlocked]));
+      } catch {
+        /* storage unavailable */
+      }
+      this.profile = { ...this.profile, ryo: this.profile.ryo + gained };
+      try {
+        localStorage.setItem(LS_PROFILE, JSON.stringify(this.profile));
+      } catch {
+        /* storage unavailable */
+      }
+      this.profileSubs.forEach((f) => f());
+      setTimeout(() => this.sfx.mastered(), 300);
+    }
+    this.achVersion++;
+    this.achSubs.forEach((f) => f());
+  }
+  private trackFight(s: GameState, win: boolean) {
+    this.bump((c) => {
+      c.fights += 1;
+      c.bestCombo = Math.max(c.bestCombo, s.stats.maxCombo);
+      if (!win) return;
+      c.wins += 1;
+      if (s.playerHp >= s.playerMaxHp) c.flawless += 1;
+      if (s.playerHp <= s.playerMaxHp * 0.1) c.clutch += 1;
+      if (s.stats.mistakes === 0) c.cleanWins += 1;
+      if (s.stats.playMs > 0 && s.stats.playMs < 40000) c.fastWins += 1;
+      if (s.characterId && !c.winsWith.includes(s.characterId)) c.winsWith.push(s.characterId);
+      if (s.mode !== "duel" && s.bossId && !c.beaten.includes(s.bossId)) c.beaten.push(s.bossId);
+      if (s.mode === "duel") c.duelWins += 1;
+      if (s.mode === "daily") c.dailyWins += 1;
+    });
+  }
+
+  // --- Daily challenge ---------------------------------------------------------
+  daily = () => dailyFor(todayKey());
+  dailyDone = () => {
+    try {
+      return localStorage.getItem(LS_DAILY) === todayKey();
+    } catch {
+      return false;
+    }
+  };
 
   // --- photo of the player's final seal (for the battle card) -----------------------
   /** JPEG data URL of the camera at the last completed seal sequence of this fight. */
@@ -283,6 +389,7 @@ export class GameSession {
   }
   private setProfile(p: Profile) {
     this.profile = p;
+    if (p.ryo > this.counters.maxRyo) this.bump((c) => (c.maxRyo = p.ryo));
     try {
       localStorage.setItem(LS_PROFILE, JSON.stringify(p));
     } catch {
@@ -299,6 +406,10 @@ export class GameSession {
     const next = buy(this.profile, id);
     if (!next) return false;
     this.setProfile(next);
+    this.bump((c) => {
+      c.upgradesBought += 1;
+      c.allUpgradesMaxed = UPGRADES.every((u) => next.upgrades[u.id] >= u.max);
+    });
     return true;
   }
   addRyo(n: number) {
@@ -452,6 +563,7 @@ export class GameSession {
     const fresh = list.filter((x) => !this.dojoMastered.includes(x)).length;
     if (fresh) this.addRyo(fresh * DOJO_REWARD);
     this.dojoMastered = Array.from(new Set([...this.dojoMastered, ...list]));
+    this.bump((c) => (c.dojoMastered = Math.max(c.dojoMastered, this.dojoMastered.length)));
     try {
       localStorage.setItem(LS_DOJO, JSON.stringify(this.dojoMastered));
     } catch {
@@ -509,6 +621,24 @@ export class GameSession {
       this.recognizer?.reset();
       this.stabilizer.reset();
       this.lastProgressAt = performance.now();
+    }
+
+    if (next.phase === "JUTSU_CAST" && prev.phase !== "JUTSU_CAST" && next.lastCast) {
+      const tags = next.lastCast.tags;
+      const perfect = next.lastCast.perfect;
+      this.bump((c) => {
+        c.casts += 1;
+        if (perfect) c.perfectCasts += 1;
+        if (tags.includes("sage")) c.sageCasts += 1;
+        if (tags.includes("shout")) c.shouts += 1;
+        c.bestCombo = Math.max(c.bestCombo, next.stats.maxCombo);
+      });
+    }
+    if (a.type === "PICK_BOON") {
+      this.sfx.detected();
+      this.bump((c) => (c.boonsPicked += 1));
+      const next2 = survivalBossFor(next.characterId ?? "naruto", (next.survival?.wave ?? 1) + 1, next.bossId);
+      this.schedule(900, () => this.dispatch({ type: "NEXT_WAVE", bossId: next2 }));
     }
 
     if (next.phase !== prev.phase) this.enterPhase(next.phase, prev.phase);
@@ -594,6 +724,7 @@ export class GameSession {
       case "DEFEAT":
         this.sfx.enemyStrike();
         this.schedule(500, () => this.sfx.defeat());
+        this.trackFight(this.state, false);
         if (this.state.mode === "survival") {
           // Wave rewards were banked as they were earned; just record the run.
           this.commitSurvival(this.state);
@@ -606,8 +737,20 @@ export class GameSession {
         this.setProfile({ ...this.profile, ryo: this.profile.ryo + r });
         this.sfx.announce("ko");
         this.schedule(900, () => this.sfx.mastered());
-        const next = survivalBossFor(s.characterId ?? "naruto", (s.survival?.wave ?? 1) + 1, s.bossId);
-        this.schedule(TIMING.waveBreak, () => this.dispatch({ type: "NEXT_WAVE", bossId: next }));
+        const wave = s.survival?.wave ?? 1;
+        const boss = s.bossId;
+        this.bump((c) => {
+          c.bestWave = Math.max(c.bestWave, wave);
+          c.bestCombo = Math.max(c.bestCombo, s.stats.maxCombo);
+          if (boss && !c.beaten.includes(boss)) c.beaten.push(boss);
+        });
+        // The player picks a boon (finger, mouse or keys 1–3); nobody is left waiting forever.
+        const offer = s.survival?.offer;
+        if (offer?.length) this.schedule(TIMING.boonAutoPick, () => this.dispatch({ type: "PICK_BOON", id: offer[0] }));
+        else {
+          const next = survivalBossFor(s.characterId ?? "naruto", wave + 1, s.bossId);
+          this.schedule(TIMING.waveBreak, () => this.dispatch({ type: "NEXT_WAVE", bossId: next }));
+        }
         break;
       }
       case "TRAINING":
@@ -617,6 +760,7 @@ export class GameSession {
         this.lastProgressAt = performance.now();
         break;
       case "VICTORY":
+        this.trackFight(this.state, true);
         this.payout(true);
         this.lastRecord = this.commitRecord(this.state);
         // After the announcer's K.O. / flawless call.
@@ -629,7 +773,16 @@ export class GameSession {
   private payout(win: boolean) {
     const s = this.state;
     if (s.mode === "training") return;
-    const n = reward({ win, rank: rankFor(s.stats), mode: s.mode, chapter: s.chapter, perfect: s.stats.perfectCount });
+    let n = reward({ win, rank: rankFor(s.stats), mode: s.mode, chapter: s.chapter, perfect: s.stats.perfectCount });
+    if (s.mode === "daily" && win) {
+      // The big daily prize is paid once per day; replays pay the normal amount.
+      if (!this.dailyDone()) n += this.daily().reward;
+      try {
+        localStorage.setItem(LS_DAILY, todayKey());
+      } catch {
+        /* storage unavailable */
+      }
+    }
     this.lastReward = n;
     const p = this.profile;
     this.setProfile({ ...p, ryo: p.ryo + n, wins: p.wins + (win ? 1 : 0), duelsWon: p.duelsWon + (win && s.mode === "duel" ? 1 : 0) });
