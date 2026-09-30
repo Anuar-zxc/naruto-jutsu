@@ -20,6 +20,13 @@ import { setLang } from "../src/lib/i18n";
 import { STARTER_RYO, withStarter, UPGRADES, buy, defaultProfile, noUpgrades, reward, sanitizeProfile, cleanNick } from "../src/lib/game/profile";
 import { trackFor } from "../src/lib/audio/music";
 import type { GameAction, GameState, JutsuId } from "../src/types/game";
+import { currentSequence } from "../src/lib/game/gameState";
+import { sumBonuses, describeBonus } from "../src/lib/game/bonuses";
+import { CLANS, canLearn, cleanTalents, clanBonuses, spentPoints } from "../src/lib/game/clans";
+import { ITEMS, ITEM_LIST } from "../src/lib/game/items";
+import { levelFor, rewardFor, xpFor, unlockedCosmetics, MAX_LEVEL } from "../src/lib/game/pass";
+import { teamCombo } from "../src/lib/game/party";
+import { mechFor } from "../src/lib/game/bosses";
 import type { SignId } from "../src/types/gestures";
 
 const results: { name: string; ok: boolean }[] = [];
@@ -289,6 +296,212 @@ async function main() {
     assert.ok(loud.lastCast!.tags.includes("shout"));
     assert.equal(loud.lastCast!.damage, Math.round(plain.lastCast!.damage * 1.2));
     assert.equal(loud.shout, false, "one shout per cast");
+  });
+
+
+  // --- v20 ---------------------------------------------------------------------------
+  const castSeq = (st: GameState): GameState => {
+    let x = st;
+    while (x.phase === "COUNTDOWN") x = gameReducer(x, { type: "COUNTDOWN_TICK" });
+    for (const sign of currentSequence(x)) x = gameReducer(x, { type: "SIGN", sign });
+    return reduce(x, { type: "SUCCESS_DONE" });
+  };
+
+  await test("v20 bonuses: clan + talents + gear sum, and change the fight", () => {
+    const b = sumBonuses([...clanBonuses("uchiha", ["uc1a", "uc2a"]), ITEMS.kunai.bonus, ITEMS.sharingan.bonus]);
+    assert.ok(Math.abs((b.el.fire ?? 0) - 0.2) < 1e-9, "uchiha passive + Katon talent");
+    assert.equal(b.burn, 0.4);
+    assert.equal(b.timeMs, 1500);
+    assert.ok(describeBonus(ITEMS.rinnegan.bonus, "ru").some((x) => x.includes("Шинра")));
+    const base = quick();
+    const geared = gameReducer(quick(), { type: "SET_BONUSES", bonuses: sumBonuses([{ hp: 0.5, shields: 2, sageStart: 40, timeMs: 2000 }]) });
+    const f0 = reduce(base, { type: "SELECT_JUTSU", id: "CHIDORI" });
+    // Bonuses are read when the fight starts: re-enter it.
+    const f1 = reduce(gameReducer(menu(), { type: "SET_BONUSES", bonuses: geared.bonuses }), { type: "SELECT_MODE", mode: "quick" }, { type: "SELECT_CHARACTER", id: "hashirama", bossId: "pain" });
+    assert.equal(f1.playerMaxHp, Math.round(base.playerMaxHp * 1.5));
+    assert.equal(f1.status.shield, 2);
+    assert.equal(f1.sage, 40);
+    const r1 = reduce(f1, { type: "SELECT_JUTSU", id: "CHIDORI" });
+    assert.equal(r1.timeLeftMs - f0.timeLeftMs, 2000);
+    // BACK_TO_MENU keeps what the player owns.
+    const back = reduce(f1, { type: "BACK_TO_MENU" });
+    assert.equal(back.bonuses.shields, 2);
+  });
+
+  await test("v20 clans: talent tree prerequisites, costs and sanitising", () => {
+    assert.equal(Object.keys(CLANS).length, 6);
+    for (const c of Object.values(CLANS)) assert.equal(c.talents.length, 7, c.id);
+    assert.ok(canLearn("uzumaki", [], "uz1a", 1));
+    assert.ok(!canLearn("uzumaki", [], "uz2a", 5), "tier 2 needs tier 1");
+    assert.ok(!canLearn("uzumaki", ["uz1a"], "uz1b", 1), "no points left");
+    assert.ok(canLearn("uzumaki", ["uz1a"], "uz2b", 2));
+    assert.equal(spentPoints("uzumaki", ["uz1a", "uz2a", "uz3a", "uz4"]), 1 + 1 + 2 + 3);
+    assert.deepEqual(cleanTalents("uzumaki", ["uz2a", "uz1a", "uc1a", "uz4"]), ["uz1a", "uz2a"]);
+    const p = sanitizeProfile({ clan: "hyuga", talents: ["hy1a"], owned: ["byakugan", "fake"], eye: "byakugan", weapon: "kunai", xp: 1000, passPaid: 99, title: "kage" });
+    assert.equal(p.clan, "hyuga");
+    assert.deepEqual(p.owned, ["byakugan"]);
+    assert.equal(p.eye, "byakugan");
+    assert.equal(p.weapon, null, "not owned");
+    assert.equal(p.passPaid, levelFor(1000));
+    assert.equal(p.title, null, "kage not unlocked at level 4");
+  });
+
+  await test("v20 armory + pass: items have art, levels pay rewards", () => {
+    assert.equal(ITEM_LIST.filter((i) => i.slot === "eye").length, 9);
+    assert.equal(ITEM_LIST.filter((i) => i.slot === "weapon").length, 8);
+    for (const it of ITEM_LIST) assert.ok(existsSync(`public${it.image}`), `art for ${it.id}`);
+    assert.equal(levelFor(0), 1);
+    assert.equal(levelFor(299), 1);
+    assert.equal(levelFor(300), 2);
+    assert.equal(levelFor(1e9), MAX_LEVEL);
+    assert.equal(rewardFor(2).kind, "title");
+    assert.equal(unlockedCosmetics(MAX_LEVEL).titles.length, 8);
+    assert.ok(xpFor({ win: true, rank: "S", mode: "daily" }) > xpFor({ win: true, rank: "C", mode: "quick" }));
+    assert.equal(xpFor({ win: true, rank: "S", mode: "training" }), 0);
+  });
+
+  await test("v20 session: buy/equip items, join a clan, learn talents, XP levels up", () => {
+    const session = new GameSession();
+    session.loadProfile();
+    const start = session.getProfile().ryo;
+    assert.ok(session.buyItem("sharingan"));
+    // −price, +100 for the "Armed" achievement.
+    assert.equal(session.getProfile().ryo, start - ITEMS.sharingan.price + 100);
+    assert.equal(session.getProfile().eye, "sharingan", "auto-equipped");
+    assert.equal(session.getState().bonuses.timeMs, 1500);
+    session.equip("sharingan");
+    assert.equal(session.getProfile().eye, null);
+    assert.ok(session.joinClan("nara"));
+    assert.equal(session.getState().bonuses.timeMs, 1500, "nara passive");
+    assert.ok(session.learnTalent("na1a"));
+    assert.ok(!session.learnTalent("na2a"), "only 1 point at level 1");
+    session.addXp(700);
+    assert.equal(levelFor(session.getProfile().xp), 3);
+    assert.equal(session.getProfile().title, "genin");
+    assert.ok(session.learnTalent("na2a"));
+    assert.equal(session.lastXp?.levelUps.length, 2);
+    session.destroy();
+  });
+
+  await test("v20 boss mechanics: Itachi reverses seals, Kakuzu hearts, Pain's Shinra, Kaguya shifts, Orochimaru regenerates", () => {
+    assert.equal(mechFor("quick", "itachi"), "tsukuyomi");
+    assert.equal(mechFor("duel", "itachi"), null);
+    // Itachi: round 2 is a genjutsu round — the sequence is reversed.
+    let s = reduce(menu(), { type: "SELECT_MODE", mode: "quick" }, { type: "SELECT_CHARACTER", id: "hashirama", bossId: "itachi" });
+    s = reduce(s, { type: "TOGGLE_LOADOUT", id: "CHIDORI" }, { type: "TOGGLE_LOADOUT", id: "GOKAKYU" }, { type: "TOGGLE_LOADOUT", id: "RYUKA" }, { type: "CONFIRM_LOADOUT" });
+    assert.equal(s.mech.genjutsu, false);
+    s = castSeq(s);
+    s = reduce(s, { type: "CAST_DONE" }, { type: "NEXT_ROUND_DONE" });
+    assert.equal(s.round, 2);
+    assert.equal(s.mech.genjutsu, true);
+    assert.deepEqual(currentSequence(s), [...JUTSU[s.jutsuId!].sequence].reverse());
+    // Making the ORIGINAL first seal no longer works.
+    let t2 = s;
+    while (t2.phase === "COUNTDOWN") t2 = gameReducer(t2, { type: "COUNTDOWN_TICK" });
+    assert.equal(gameReducer(t2, { type: "SIGN", sign: JUTSU[s.jutsuId!].sequence[0] }).seqIndex, 0);
+    const done = castSeq(s);
+    assert.ok(done.lastCast?.tags.includes("genjutsu"));
+    // Immune with the right eye.
+    const imm = reduce(gameReducer(menu(), { type: "SET_BONUSES", bonuses: sumBonuses([ITEMS["mangekyo-itachi"].bonus]) }), { type: "SELECT_MODE", mode: "quick" }, { type: "SELECT_CHARACTER", id: "hashirama", bossId: "itachi" }, { type: "SELECT_JUTSU", id: "CHIDORI" });
+    let im2 = reduce(castSeq(imm), { type: "CAST_DONE" }, { type: "NEXT_ROUND_DONE" });
+    assert.equal(im2.mech.genjutsu, false);
+
+    // Kakuzu: same element twice is resisted.
+    let k = reduce(menu(), { type: "SELECT_MODE", mode: "quick" }, { type: "SELECT_CHARACTER", id: "hashirama", bossId: "kakuzu" });
+    k = reduce(k, { type: "TOGGLE_LOADOUT", id: "GOKAKYU" }, { type: "TOGGLE_LOADOUT", id: "RYUKA" }, { type: "TOGGLE_LOADOUT", id: "CHIDORI" }, { type: "CONFIRM_LOADOUT" });
+    k = castSeq(k);
+    const d1 = k.lastCast!.damage;
+    k = reduce(k, { type: "CAST_DONE" }, { type: "NEXT_ROUND_DONE" });
+    k = castSeq(k); // RYUKA — fire again
+    assert.ok(k.lastCast!.tags.includes("resisted"));
+    k = reduce(k, { type: "CAST_DONE" }, { type: "NEXT_ROUND_DONE" });
+    k = castSeq(k); // CHIDORI — new element
+    assert.ok(k.lastCast!.tags.includes("heart"));
+    assert.ok(d1 > 0);
+
+    // Pain: round 3 repels anything but a perfect jutsu.
+    let pn = reduce(menu(), { type: "SELECT_MODE", mode: "quick" }, { type: "SELECT_CHARACTER", id: "hashirama", bossId: "pain" }, { type: "SELECT_JUTSU", id: "HENGE" });
+    pn = reduce(castSeq(pn), { type: "CAST_DONE" }, { type: "NEXT_ROUND_DONE" });
+    pn = reduce(castSeq(pn), { type: "CAST_DONE" }, { type: "NEXT_ROUND_DONE" });
+    assert.equal(pn.round, 3);
+    while (pn.phase === "COUNTDOWN") pn = gameReducer(pn, { type: "COUNTDOWN_TICK" });
+    pn = gameReducer(pn, { type: "MISTAKE", sign: "RAT" });
+    pn = castSeq(pn);
+    assert.ok(pn.lastCast!.tags.includes("repelled"));
+
+    // Kaguya: below half the arena shifts and timers shrink.
+    let kg = reduce(menu(), { type: "SELECT_MODE", mode: "quick" }, { type: "SELECT_CHARACTER", id: "hashirama", bossId: "kaguya" }, { type: "SELECT_JUTSU", id: "RASENSHURIKEN" });
+    kg = castSeq(kg);
+    assert.ok(kg.mech.shifted, "shifted");
+    assert.equal(kg.mech.event?.kind, "shift");
+
+    // Orochimaru regenerates.
+    let o = reduce(menu(), { type: "SELECT_MODE", mode: "quick" }, { type: "SELECT_CHARACTER", id: "hashirama", bossId: "orochimaru" }, { type: "SELECT_JUTSU", id: "HENGE" });
+    o = castSeq(o);
+    const before = o.bossHp;
+    o = gameReducer(o, { type: "CAST_DONE" });
+    assert.equal(o.bossHp, before + 40);
+    assert.equal(o.lastRound?.regen, 40);
+
+    // Madara: shields don't stop Limbo.
+    let m = reduce(menu(), { type: "SELECT_MODE", mode: "quick" }, { type: "SELECT_CHARACTER", id: "hashirama", bossId: "madara" }, { type: "SELECT_JUTSU", id: "KAWARIMI" });
+    m = castSeq(m);
+    assert.ok(m.status.shield >= 2);
+    const hp0 = m.playerHp;
+    m = { ...m, lastCast: { ...m.lastCast!, perfect: false } };
+    m = gameReducer(m, { type: "CAST_DONE" });
+    assert.ok(m.playerHp < hp0, "Limbo hits through shields");
+  });
+
+  await test("v20 party: versus hot seat swaps players; co-op fuses team techniques", () => {
+    let v = reduce(menu(), { type: "SELECT_MODE", mode: "party", variant: "versus" }, { type: "SELECT_CHARACTER", id: "naruto-six-paths" });
+    assert.equal(v.phase, "CHARACTER_SELECT");
+    assert.deepEqual(v.party?.heroes, ["naruto-six-paths"]);
+    v = reduce(v, { type: "SELECT_CHARACTER", id: "sasuke" }, { type: "SELECT_JUTSU", id: "CHIDORI" });
+    assert.equal(v.characterId, "naruto-six-paths");
+    assert.equal(v.bossId, "sasuke");
+    assert.equal(v.countdown, 5);
+    v = castSeq(v);
+    const dmg = v.lastCast!.damage;
+    v = reduce(v, { type: "CAST_DONE" });
+    assert.equal(v.phase, "NEXT_ROUND", "no AI retaliation");
+    v = reduce(v, { type: "NEXT_ROUND_DONE" });
+    assert.equal(v.party?.turn, 1);
+    assert.equal(v.characterId, "sasuke");
+    assert.equal(v.playerHp, 1000 - dmg, "player 2 carries the damage");
+    assert.equal(v.bossHp, 1000);
+    // Timeout in versus = fizzle, then next player.
+    while (v.phase === "COUNTDOWN") v = gameReducer(v, { type: "COUNTDOWN_TICK" });
+    v = gameReducer(v, { type: "TICK", dt: 1e6 });
+    assert.equal(v.phase, "FAILED");
+    assert.equal(v.playerHp, 1000 - dmg);
+    v = gameReducer(v, { type: "BACK_TO_SELECTION" });
+    assert.equal(v.party?.turn, 0);
+    // KO → the caster wins.
+    v = { ...v, party: { ...v.party!, hp: [1000, 50] } };
+    v = gameReducer(v, { type: "RETRY" });
+    v = { ...v, party: { ...v.party!, turn: 0 } };
+    v = gameReducer({ ...v, phase: "NEXT_ROUND" }, { type: "NEXT_ROUND_DONE" });
+    assert.equal(v.characterId, "sasuke");
+    // Co-op.
+    assert.equal(teamCombo("RASENGAN", "CHIDORI")?.mult, 2.2);
+    assert.equal(teamCombo("CHIDORI", "CHIDORI"), null);
+    let c = reduce(menu(), { type: "SELECT_MODE", mode: "party", variant: "coop" }, { type: "SELECT_CHARACTER", id: "naruto-six-paths" }, { type: "SELECT_CHARACTER", id: "sasuke", bossId: "madara" });
+    assert.equal(c.bossMaxHp, 2200);
+    assert.equal(c.playerMaxHp, 1500);
+    c = reduce(c, { type: "TOGGLE_LOADOUT", id: "RASENGAN" }, { type: "TOGGLE_LOADOUT", id: "CHIDORI" }, { type: "TOGGLE_LOADOUT", id: "HENGE" }, { type: "CONFIRM_LOADOUT" });
+    c = castSeq(c);
+    c = { ...c, lastCast: { ...c.lastCast!, perfect: true } };
+    c = reduce(c, { type: "CAST_DONE" }, { type: "NEXT_ROUND_DONE" });
+    assert.equal(c.party?.turn, 1);
+    assert.equal(c.jutsuId, "CHIDORI");
+    c = castSeq(c);
+    assert.ok(c.lastCast!.tags.includes("team"), c.lastCast!.tags.join());
+    assert.equal(c.party?.team?.id, "rasengan-chidori");
+    // Upgrades don't apply in party.
+    const up = reduce(gameReducer(menu(), { type: "SET_UPGRADES", upgrades: { ...noUpgrades(), chakra: 5 } }), { type: "SELECT_MODE", mode: "party", variant: "versus" }, { type: "SELECT_CHARACTER", id: "sasuke" }, { type: "SELECT_CHARACTER", id: "itachi" });
+    assert.equal(up.playerMaxHp, 1000);
+    assert.equal(up.mech.id, null, "no boss mechanics between players");
   });
 
   await test("daily challenge: same modifiers for the same date; modifiers change the fight; boons apply", async () => {

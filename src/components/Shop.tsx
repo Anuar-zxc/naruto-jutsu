@@ -6,7 +6,9 @@ import { useProfile } from "@/hooks/useProfile";
 import { useLang } from "@/hooks/useLang";
 import { MAX_NICK, UPGRADES, nextCost, type UpgradeId } from "@/lib/game/profile";
 import { CHARACTERS } from "@/lib/game/characters";
-import { t, tr } from "@/lib/i18n";
+import { getLang, t, tr } from "@/lib/i18n";
+import { ITEM_LIST, RARITY_COLOR, RARITY_NAME, type ItemId, type ItemSlot } from "@/lib/game/items";
+import { describeBonus } from "@/lib/game/bonuses";
 import { Portrait } from "./Portrait";
 
 /** What an upgrade gives at a given level, as a short number. */
@@ -58,6 +60,26 @@ export function Shop() {
   const [nick, setNick] = useState(p.nick);
   const [flash, setFlash] = useState<string | null>(null);
   const [line, setLine] = useState<{ text: string; key: number }>({ text: t("keeperHello"), key: 0 });
+  const [tab, setTab] = useState<"scrolls" | ItemSlot>("scrolls");
+  const lang = getLang();
+  const buyItem = (id: ItemId) => {
+    const it = ITEM_LIST.find((x) => x.id === id)!;
+    if (p.owned.includes(id)) {
+      session.equip(id);
+      session.sfx.select();
+      return say(p.eye === id || p.weapon === id ? t("keeperUnequip", { name: tr(it.name) }) : t("keeperEquip", { name: tr(it.name) }));
+    }
+    if (p.ryo < it.price) {
+      session.sfx.error();
+      return say(t("keeperPoor", { n: it.price - p.ryo }));
+    }
+    if (session.buyItem(id)) {
+      session.sfx.mastered();
+      setFlash(id);
+      setTimeout(() => setFlash(null), 900);
+      say(t("keeperItem", { name: tr(it.name) }));
+    }
+  };
   const ryo = useRolling(p.ryo);
   const keeper = CHARACTERS.jiraiya;
   const say = (text: string) => setLine({ text, key: Date.now() });
@@ -109,7 +131,64 @@ export function Shop() {
             </div>
           </header>
 
-          <div className="shop2-list">
+          <nav className="ach-tabs shop-tabs">
+            <button className={tab === "scrolls" ? "on" : ""} onClick={() => setTab("scrolls")} data-tab="scrolls">
+              巻 {t("tabScrolls")}
+            </button>
+            <button className={tab === "eye" ? "on" : ""} onClick={() => setTab("eye")} data-tab="eye">
+              眼 {t("tabEyes")}
+            </button>
+            <button className={tab === "weapon" ? "on" : ""} onClick={() => setTab("weapon")} data-tab="weapon">
+              武 {t("tabWeapons")}
+            </button>
+          </nav>
+
+          {tab !== "scrolls" && (
+            <div className="armory">
+              {ITEM_LIST.filter((it) => it.slot === tab).map((it, i) => {
+                const own = p.owned.includes(it.id);
+                const on = p.eye === it.id || p.weapon === it.id;
+                const afford = p.ryo >= it.price;
+                return (
+                  <button
+                    key={it.id}
+                    className={`item-card ${it.slot} ${own ? "own" : ""} ${on ? "on" : ""} ${!own && afford ? "afford" : ""} ${flash === it.id ? "bought" : ""}`}
+                    style={{ ["--glow" as string]: it.color, ["--rar" as string]: RARITY_COLOR[it.rarity], animationDelay: `${i * 0.04}s` }}
+                    onClick={() => buyItem(it.id)}
+                    data-item={it.id}
+                  >
+                    <div className="ic-art">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={it.image} alt={tr(it.name)} loading="lazy" />
+                    </div>
+                    <div className="ic-kanji">{it.kanji}</div>
+                    <b className="ic-name">{tr(it.name)}</b>
+                    <span className="ic-rar">{tr(RARITY_NAME[it.rarity])}</span>
+                    <ul className="ic-bonus">
+                      {describeBonus(it.bonus, lang).map((x) => (
+                        <li key={x}>{x}</li>
+                      ))}
+                    </ul>
+                    <p className="ic-lore">{tr(it.lore)}</p>
+                    <div className="ic-foot">
+                      {on ? (
+                        <em className="ic-on">✓ {t("equipped")}</em>
+                      ) : own ? (
+                        <em>{t("equip")}</em>
+                      ) : (
+                        <span className="si-price">
+                          <span className="purse-coin">両</span>
+                          {it.price.toLocaleString("en-US")}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {tab === "scrolls" && <div className="shop2-list">
             {UPGRADES.map((u, i) => {
               const lvl = p.upgrades[u.id];
               const cost = nextCost(p, u.id);
@@ -159,7 +238,7 @@ export function Shop() {
                 </div>
               );
             })}
-          </div>
+          </div>}
 
           <footer className="shop2-foot">
             <form

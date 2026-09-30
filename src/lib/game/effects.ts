@@ -63,6 +63,12 @@ const TAG_KEY = {
   combo: "tagCombo",
   sage: "tagSage",
   shout: "tagShout",
+  genjutsu: "tagGenjutsu",
+  resisted: "tagResisted",
+  heart: "tagHeart",
+  repelled: "tagRepelled",
+  team: "tagTeam",
+  drain: "tagDrain",
 } as const;
 
 export function tagText(tag: string): string | null {

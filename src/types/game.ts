@@ -3,6 +3,9 @@ import type { SignId } from "./gestures";
 import type { CharacterId } from "@/lib/game/characters";
 import type { L } from "./i18n";
 import type { Upgrades } from "@/lib/game/profile";
+import type { Bonuses } from "@/lib/game/bonuses";
+import type { MechId } from "@/lib/game/bosses";
+import type { PartyVariant } from "@/lib/game/party";
 
 export type Phase =
   | "IDLE"
@@ -24,6 +27,7 @@ export type Phase =
   | "SHOP"
   | "LOBBY"
   | "WAVE_CLEAR"
+  | "LAB"
   | "VICTORY";
 
 export type Element = "fire" | "water" | "lightning" | "chakra" | "wind";
@@ -61,9 +65,43 @@ export interface RoundReport {
   blocked: boolean;
   staggered: boolean;
   healed: number;
+  /** Chakra the enemy regenerated (Orochimaru). */
+  regen?: number;
   id: number;
 }
-export type GameMode = "story" | "quick" | "training" | "duel" | "survival" | "daily";
+export type GameMode = "story" | "quick" | "training" | "duel" | "survival" | "daily" | "party" | "lab";
+
+/** Boss mechanic state for the current fight. */
+export interface MechState {
+  id: MechId | null;
+  /** Itachi: this round's seals are reversed. */
+  genjutsu: boolean;
+  /** Kakuzu: element of the previous jutsu. */
+  lastEl: Element | null;
+  /** Kaguya: the arena has shifted. */
+  shifted: boolean;
+  /** Last mechanic event (for the announcer). */
+  event: { kind: "genjutsu" | "shift" | "shinra" | "repelled" | "regen" | "resisted" | "heart"; id: number } | null;
+}
+
+/** Hot-seat party (two players, one camera). */
+export interface PartyState {
+  variant: PartyVariant;
+  heroes: CharacterId[];
+  /** Versus: each player's chakra. */
+  hp: [number, number];
+  max: [number, number];
+  /** Whose turn it is (0 = player 1). */
+  turn: 0 | 1;
+  /** Co-op: the previous successful cast (for team techniques). */
+  lastCast: { turn: 0 | 1; jutsu: JutsuId } | null;
+  /** Co-op: the team technique of the last cast. */
+  team: { id: string; turn: 0 | 1; a: JutsuId; b: JutsuId; eventId: number } | null;
+  /** Who won (versus), set at the end. */
+  winner: 0 | 1 | null;
+  /** Damage dealt by each player. */
+  dealt: [number, number];
+}
 
 export interface Jutsu {
   id: JutsuId;
@@ -167,6 +205,14 @@ export interface GameState {
   sage: number;
   /** The player shouted the jutsu's name (speech recognition) — +20% on this cast. */
   shout: boolean;
+  /** Clan, talents, eye and weapon — summed. */
+  bonuses: Bonuses;
+  /** Boss mechanic (Itachi, Kakuzu, Kaguya, Pain, Madara, Orochimaru). */
+  mech: MechState;
+  /** Party mode (hot seat). */
+  party: PartyState | null;
+  /** Online duel: two jutsu collided. */
+  clash: { mine: JutsuId; theirs: string; absorbed: number; id: number } | null;
   /** Monotonic counter bumped on every seal/mistake so the UI can animate. */
   eventId: number;
 }
@@ -175,7 +221,8 @@ export type GameAction =
   | { type: "START" }
   | { type: "CAMERA_READY" }
   | { type: "ENTER_SELECTION" }
-  | { type: "SELECT_MODE"; mode: GameMode }
+  | { type: "SELECT_MODE"; mode: GameMode; variant?: PartyVariant }
+  | { type: "SET_BONUSES"; bonuses: Bonuses }
   | { type: "SELECT_CHAPTER"; index: number }
   | { type: "DIALOGUE_NEXT" }
   | { type: "DIALOGUE_SKIP" }
@@ -192,7 +239,7 @@ export type GameAction =
   | { type: "CLOSE_SHOP" }
   | { type: "DUEL_OPPONENT"; nick: string; heroId: CharacterId }
   | { type: "DUEL_BEGIN" }
-  | { type: "REMOTE_HIT"; amount: number }
+  | { type: "REMOTE_HIT"; amount: number; clash?: { mine: JutsuId; theirs: string; absorbed: number } }
   | { type: "REMOTE_HP"; hp: number; max: number }
   | { type: "DUEL_RESULT"; win: boolean }
   | { type: "CONFIRM_LOADOUT" }

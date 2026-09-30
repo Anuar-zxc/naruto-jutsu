@@ -12,6 +12,11 @@ import { Achievements } from "./Achievements";
 import { ACHIEVEMENTS } from "@/lib/game/achievements";
 import { MUTATORS } from "@/lib/game/mutators";
 import { t, tr } from "@/lib/i18n";
+import { PathScreen } from "./PathScreen";
+import { Leaderboard } from "./Leaderboard";
+import { PartySetup } from "./Party";
+import { levelFor, TITLES } from "@/lib/game/pass";
+import { CLANS } from "@/lib/game/clans";
 
 interface Entry {
   id: string;
@@ -40,6 +45,13 @@ export function ModeSelect() {
   const [mastered, setMastered] = useState(0);
   const [sel, setSel] = useState(0);
   const [showAch, setShowAch] = useState(false);
+  const [overlay, setOverlay] = useState<null | "path" | "lb" | "party">(null);
+  const open = (o: "path" | "lb" | "party") => {
+    session.sfx.unlock();
+    session.sfx.select();
+    setOverlay(o);
+  };
+  const level = levelFor(profile.xp);
   const daily = session.daily();
   const dailyDone = session.dailyDone();
   const achDone = ACHIEVEMENTS.filter((a) => session.isUnlocked(a.id)).length;
@@ -77,8 +89,21 @@ export function ModeSelect() {
       accent: "#ff3d6e",
       go: () => pick("daily"),
     },
+    { id: "party", kanji: "宴", title: t("partyTitle"), tag: t("tagParty"), desc: t("partyDesc"), meta: t("partyMeta"), bg: bg("arena"), hero: "boruto", accent: "#ff9f1c", go: () => open("party") },
     { id: "duel", kanji: "対戦", title: t("duelTitle"), tag: t("tagDuel"), desc: t("duelDesc"), bg: bg("arena"), hero: "itachi", accent: "#a970ff", go: () => pick("duel") },
     { id: "training", kanji: "修行", title: t("dojoTitle"), tag: t("tagDojo"), desc: t("dojoDesc"), meta: t("dojoMastered", { m: mastered, n: SIGN_LIST.length }), bg: bg("canyon"), hero: "kakashi", accent: "#ffc15e", go: () => pick("training") },
+    {
+      id: "path",
+      kanji: "道",
+      title: t("pathTitle"),
+      tag: t("tagPath"),
+      desc: t("pathDesc"),
+      meta: `${t("levelShort")} ${level}${profile.clan ? ` · ${CLANS[profile.clan].kanji} ${tr(CLANS[profile.clan].name)}` : ""}`,
+      bg: bg("valley"),
+      hero: profile.clan ? CLANS[profile.clan].face : "hashirama",
+      accent: profile.clan ? CLANS[profile.clan].color : "#2e9e5b",
+      go: () => open("path"),
+    },
     {
       id: "achievements",
       kanji: "実績",
@@ -94,6 +119,8 @@ export function ModeSelect() {
         setShowAch(true);
       },
     },
+    { id: "leaderboard", kanji: "番付", title: t("lbTitle"), tag: t("tagLb"), desc: t("lbDesc"), bg: bg("summit"), hero: "tsunade", accent: "#ffd166", go: () => open("lb") },
+    { id: "lab", kanji: "技術", title: t("labTitle"), tag: t("tagLab"), desc: t("labDesc"), bg: bg("konohanight"), hero: "shikamaru", accent: "#7cf2ff", go: () => pick("lab") },
     {
       id: "shop",
       kanji: "店",
@@ -121,7 +148,7 @@ export function ModeSelect() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (showAch) return;
+      if (showAch || overlay) return;
       if (e.key === "ArrowDown" || e.key === "s") setSel((i) => (i + 1) % entries.length);
       else if (e.key === "ArrowUp" || e.key === "w") setSel((i) => (i - 1 + entries.length) % entries.length);
       else if (e.key === "Enter") entries[sel].go();
@@ -135,6 +162,9 @@ export function ModeSelect() {
   return (
     <div className="select-overlay main-menu" style={{ ["--accent" as string]: cur.accent }}>
       {showAch && <Achievements onClose={() => setShowAch(false)} />}
+      {overlay === "path" && <PathScreen onClose={() => setOverlay(null)} />}
+      {overlay === "lb" && <Leaderboard onClose={() => setOverlay(null)} />}
+      {overlay === "party" && <PartySetup onClose={() => setOverlay(null)} />}
       {/* The highlighted mode's location fills the screen. */}
       <div className="mm-bg">
         {entries.map((e, i) => (
@@ -147,12 +177,16 @@ export function ModeSelect() {
         <div className="mm-head">
           <div className="mm-title">{t("chooseMode")}</div>
           <button className="mm-player" onClick={() => entries.find((e) => e.id === "shop")!.go()} title={t("shopTitle")}>
-            <b>{profile.nick}</b>
+            <b>
+              {profile.nick}
+              {profile.title && <i className="mm-title-tag">{tr(TITLES[profile.title])}</i>}
+            </b>
+            <span className="mm-lvl">{t("levelShort")} {level}</span>
             <span className="purse-coin">両</span>
             <em>{profile.ryo.toLocaleString("en-US")}</em>
           </button>
         </div>
-        <nav className="mm-list">
+        <nav className="mm-list dense">
           {entries.map((e, i) => (
             <button
               key={e.id}
@@ -189,7 +223,7 @@ export function ModeSelect() {
           <div className="mm-card-foot">
             {cur.meta && <span className="mm-meta">{cur.meta}</span>}
             <button className="btn primary mm-go" onClick={cur.go} data-action="mode-go">
-              {cur.id === "shop" ? t("enterShop") : cur.id === "achievements" ? t("achOpen") : t("playCta")} ▸
+              {cur.id === "shop" ? t("enterShop") : ["achievements", "path", "leaderboard"].includes(cur.id) ? t("achOpen") : t("playCta")} ▸
             </button>
           </div>
         </div>

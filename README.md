@@ -118,6 +118,29 @@ Zodiac sequences come from fan seal guides for the series (sources vary on some)
 - Every jutsu has its own animation: Rasengan dash and spiral, Chidori crackle-dash-pierce, Great Fireball, Dragon Flame jet, Phoenix Flower volley, Water Dragon, Shadow Clones rushing in, a summoned toad stomp, substitution log, the fūma-shuriken transformation, Kirin from the sky and the Rasenshuriken dome.
 - The enemy lunges across the stage to counter-attack; hits knock fighters back.
 
+## Clans, talents, armory, Shinobi Path (v20)
+
+- **Clans** — Uzumaki, Uchiha, Hyūga, Senju, Nara, Hatake. Each has a passive bonus and a 7-node talent tree (4 tiers, capstone). Talent points = your level. Switching clan costs 500 ryō; talents reset for free.
+- **Armory** (in the shop) — 9 dōjutsu (Sharingan, Mangekyō, Eternal Mangekyō, Byakugan, Rinnegan, Rinne Sharingan, Tenseigan, Jōgan) and 8 weapons (Kunai, Fūma Shuriken, Minato's Kunai, Samehada, Kubikiribōchō, Kusanagi, Madara's Gunbai, Hidan's Scythe). One eye + one weapon equipped; some counter boss mechanics (Itachi's Mangekyō → immune to Tsukuyomi, Rinnegan → pierces Shinra Tensei, Jōgan → sees through the Mist).
+- **Shinobi Path** — the season pass: XP from every fight, 30 levels, rewards are ryō, titles under your nick and battle-card frames.
+- Everything permanent sums into one `Bonuses` object (`src/lib/game/bonuses.ts`) that the reducer reads.
+
+## Boss mechanics (v20)
+
+Itachi — every 3rd round the seals must be made in reverse (Tsukuyomi). Kakuzu — the same element twice is resisted, a new one hits ×1.25. Kaguya — below half chakra she shifts dimension (new arena, timers −15%). Pain / Nagato — every 3rd round only a perfect jutsu breaks Shinra Tensei. Madara — Limbo walks through shields. Orochimaru — regenerates each round.
+
+## Party mode, team techniques, jutsu clash (v20)
+
+Two players, one camera, taking turns. **Versus**: 1000 chakra each, one jutsu per turn at each other (upgrades and gear are off). **Co-op**: shared chakra vs a boss; two different jutsu back-to-back from the two players fuse into a team technique (Rasengan × Chidori ×2.2, Scorch Storm, Storm Dragon…). In the **online duel**, two jutsu landing within 1.8 s collide — yours absorbs half its power from theirs.
+
+## Online leaderboard (v20)
+
+`/api/leaderboard` keeps the best survival wave and today's daily score per nickname. Storage is Upstash Redis via its REST API: in Vercel → Storage → create **Upstash for Redis** and connect it to the project (it sets `KV_REST_API_URL` / `KV_REST_API_TOKEN`). Without it the board lives in server memory and resets on redeploy.
+
+## "How it works" lab (v20)
+
+A live view of the pipeline for the jury: camera → MediaPipe (21 landmarks per hand) → finger extension / pointing / palm distance → per-seal confidence with thresholds → the temporal hold → accepted seals.
+
 ## Achievements, Daily Challenge, survival boons
 
 - **40 achievements** in five groups (battle, mastery, story, survival, shinobi world) — flawless wins, clutch wins, 30-seal combos, sage casts, shouts, all Akatsuki beaten, every Ōtsutsuki… Each pays ryō once; a gold toast pops up the moment one unlocks. Progress bars show how close you are.

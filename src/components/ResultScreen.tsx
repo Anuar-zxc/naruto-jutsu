@@ -52,6 +52,7 @@ export function ResultScreen({ onExit }: { onExit: () => void }) {
             <span className="purse-coin">両</span> {t("rewardLine", { n: session.lastReward })}
           </div>
         )}
+        <XpLine />
         <div className={`rank rank-${rank}`}>{rank}</div>
         {rec?.isNew ? (
           <div className="new-record">★ {t("newRecord")} ★</div>
@@ -96,6 +97,24 @@ export function ResultScreen({ onExit }: { onExit: () => void }) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** "+120 XP" and any levels gained. */
+export function XpLine() {
+  useLang();
+  const session = useSession();
+  const x = session.lastXp;
+  if (!x || !x.gained) return null;
+  return (
+    <div className="xp-line" data-xp={x.gained}>
+      <span className="xp-gain">+{x.gained} XP</span>
+      {x.levelUps.map((u) => (
+        <span key={u.level} className="xp-lvl">
+          ▲ {t("levelShort")} {u.level}
+        </span>
+      ))}
     </div>
   );
 }
@@ -177,6 +196,7 @@ export function DefeatPanel({ onExit }: { onExit: () => void }) {
             <span className="purse-coin">両</span> {t("rewardLine", { n: session.lastReward })}
           </div>
         )}
+        <XpLine />
         <SenseiReview outcome="defeat" />
         <div className="defeat-tip">{t("defeatTip")}</div>
         <div className="result-actions">

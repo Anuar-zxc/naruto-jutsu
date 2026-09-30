@@ -11,7 +11,8 @@
  *   PLAYING → FAILED (time out, enemy strikes) → COUNTDOWN (retry | next jutsu)
  *   any hit that empties the player's chakra → DEFEAT
  */
-import type { GameAction, GameState, GameStats, JutsuId, Phase, Status } from "@/types/game";
+import type { GameAction, GameState, GameStats, JutsuId, MechState, Phase, Status } from "@/types/game";
+import type { SignId } from "@/types/gestures";
 import { BOSS, JUTSU, JUTSU_ORDER, LOADOUT_SIZE } from "./jutsu";
 import { castResult, pointsForSign } from "./scoring";
 import { CHARACTERS, bossFor, damageMultiplier, mentorFor } from "./characters";
@@ -19,6 +20,24 @@ import { CHAPTERS, jutsuForChapter, linesFor } from "./story";
 import { LOCATIONS, QUICK_ROTATION, type Location } from "./locations";
 import { focusMult, hpMult, noUpgrades, powerMult, speedBonusMs, startShields } from "./profile";
 import { DAILY_HP, boonOffer, combine, type BoonId } from "./mutators";
+import { hasFlag, noBonuses, type Bonuses } from "./bonuses";
+import { DIMENSION_TIME, HEART_NEW, HEART_SAME, LIMBO_MULT, SHED_HP, SHINRA_MULT, isGenjutsuRound, isShinraRound, mechFor } from "./bosses";
+import { COOP_BOSS_HP, COOP_TEAM_HP, PARTY_COUNTDOWN, PARTY_HP, teamCombo } from "./party";
+import { randomBossFor } from "./characters";
+
+const NO_BONUSES = noBonuses();
+const NO_UPGRADES = noUpgrades();
+/** Party mode is played on one profile by two people: permanent upgrades and gear stay out of it. */
+const B = (s: GameState): Bonuses => (s.mode === "party" ? NO_BONUSES : s.bonuses);
+const U = (s: GameState) => (s.mode === "party" ? NO_UPGRADES : s.upgrades);
+export const emptyMech = (): MechState => ({ id: null, genjutsu: false, lastEl: null, shifted: false, event: null });
+
+/** The seals the player must make right now (Itachi's genjutsu reverses them). */
+export function currentSequence(s: GameState): SignId[] {
+  if (!s.jutsuId) return [];
+  const seq = JUTSU[s.jutsuId].sequence;
+  return s.mech.genjutsu ? [...seq].reverse() : seq;
+}
 
 /** Online duel: both players start with this much chakra (×10 the solo scale). */
 export const DUEL_HP = 1000;
@@ -98,12 +117,19 @@ export const initialGameState = (): GameState => ({
   lastPoints: null,
   sage: 0,
   shout: false,
+  bonuses: noBonuses(),
+  mech: emptyMech(),
+  party: null,
+  clash: null,
   eventId: 0,
 });
 
+/** A fresh state that keeps what the player owns (upgrades, gear). */
+const fresh = (s: GameState): GameState => ({ ...initialGameState(), upgrades: s.upgrades, bonuses: s.bonuses });
+
 const ALL_PHASES: Phase[] = [
   "CAMERA_CHECK", "READY", "MODE_SELECT", "CHARACTER_SELECT", "CHAPTER_SELECT", "DIALOGUE", "JUTSU_SELECTION",
-  "COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED", "DEFEAT", "TRAINING", "SHOP", "LOBBY", "WAVE_CLEAR", "VICTORY",
+  "COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED", "DEFEAT", "TRAINING", "SHOP", "LOBBY", "WAVE_CLEAR", "LAB", "VICTORY",
 ];
 
 /** Which actions are legal in which phase — anything else is ignored. */
@@ -119,7 +145,7 @@ const ALLOWED: Record<GameAction["type"], Phase[]> = {
   DIALOGUE_SKIP: ["DIALOGUE"],
   STORY_OUTRO: ["VICTORY"],
   BACK_TO_CHAPTERS: ["JUTSU_SELECTION", "VICTORY", "FAILED", "DEFEAT"],
-  BACK_TO_MENU: ["CHARACTER_SELECT", "CHAPTER_SELECT", "JUTSU_SELECTION", "VICTORY", "DEFEAT", "TRAINING", "SHOP", "LOBBY"],
+  BACK_TO_MENU: ["CHARACTER_SELECT", "CHAPTER_SELECT", "JUTSU_SELECTION", "VICTORY", "DEFEAT", "TRAINING", "SHOP", "LOBBY", "LAB"],
   SELECT_JUTSU: ["JUTSU_SELECTION"],
   COUNTDOWN_TICK: ["COUNTDOWN"],
   TICK: ["PLAYING"],
@@ -135,7 +161,8 @@ const ALLOWED: Record<GameAction["type"], Phase[]> = {
   SELECT_SLOT: ["COUNTDOWN", "PLAYING"],
   RESTART: ["VICTORY", "FAILED", "DEFEAT", "JUTSU_SELECTION"],
   QUIT: ALL_PHASES,
-  SET_UPGRADES: ALL_PHASES,
+  SET_UPGRADES: ["IDLE", ...ALL_PHASES],
+  SET_BONUSES: ["IDLE", ...ALL_PHASES],
   OPEN_SHOP: ["MODE_SELECT"],
   CLOSE_SHOP: ["SHOP"],
   DUEL_OPPONENT: ["LOBBY"],
@@ -176,7 +203,9 @@ export function timeLimit(s: GameState, base: number): number {
   const bonus = s.characterId ? CHARACTERS[s.characterId].timeBonusMs : 0;
   const run = s.survival?.timeBonusMs ?? 0;
   const mod = combine(s.mutators).timeMult;
-  return Math.max(4000, Math.round((base + bonus + run + speedBonusMs(s.upgrades)) * mod * (enraged(s) && s.mode !== "duel" ? 0.85 : 1)));
+  const dim = s.mech.shifted && !hasFlag(B(s), "noDimension") ? DIMENSION_TIME : 1;
+  const rage = enraged(s) && s.mode !== "duel" && !(s.party?.variant === "versus") ? 0.85 : 1;
+  return Math.max(4000, Math.round((base + bonus + run + speedBonusMs(U(s)) + B(s).timeMs) * mod * rage * dim));
 }
 
 /** Chakra a wrong seal costs (grows through the story). */
@@ -185,8 +214,8 @@ export function mistakeCost(s: GameState): number {
   if (s.mode === "survival" && s.survival) base = Math.min(16, 7 + Math.floor(s.survival.wave / 2));
   if (s.mode === "story" && s.chapter != null) base = 6 + Math.round((s.chapter / Math.max(1, CHAPTERS.length - 1)) * 6);
   base *= CHAKRA_SCALE;
-  if (s.mode === "duel") base = 60;
-  return Math.max(1, Math.round(base * focusMult(s.upgrades) * combine(s.mutators).mistakeMult * (s.survival?.focusMult ?? 1)));
+  if (s.mode === "duel" || s.party?.variant === "versus") base = 60;
+  return Math.max(1, Math.round(base * focusMult(U(s)) * (1 - B(s).mistake) * combine(s.mutators).mistakeMult * (s.survival?.focusMult ?? 1)));
 }
 
 /** Chakra numbers (heal, recoil) scale with the mode: duels run on 1000 chakra. */
@@ -195,17 +224,41 @@ const hpScale = (_s: GameState) => CHAKRA_SCALE;
 /** How many jutsu the player picks for this fight. */
 export const loadoutSize = (s: GameState) => Math.min(LOADOUT_SIZE, availableJutsu(s).length);
 
-function startRound(s: GameState, slot: number): GameState {
+function startRound(s0: GameState, slot: number): GameState {
+  let s = s0;
+  // Party: the player whose turn it is steps up (versus: the other one is the target).
+  if (s.party) {
+    const t = s.party.turn;
+    const p = s.party;
+    s = { ...s, characterId: p.heroes[t] };
+    if (p.variant === "versus") s = { ...s, bossId: p.heroes[1 - t], playerHp: p.hp[t], playerMaxHp: p.max[t], bossHp: p.hp[1 - t], bossMaxHp: p.max[1 - t] };
+  }
   const id = s.loadout[slot % s.loadout.length];
   const j = JUTSU[id];
-  return { ...s, phase: "COUNTDOWN", shout: false, slot: slot % s.loadout.length, jutsuId: id, seqIndex: 0, timeLeftMs: timeLimit(s, j.timeLimitMs), countdown: COUNTDOWN_FROM, jutsuMistakes: 0 };
+  const genjutsu = s.mech.id === "tsukuyomi" && isGenjutsuRound(s.round) && !hasFlag(B(s), "noGenjutsu") && j.sequence.length > 1;
+  const mech: MechState = { ...s.mech, genjutsu, event: genjutsu ? { kind: "genjutsu", id: s.eventId + 1 } : s.mech.id === "shinra" && isShinraRound(s.round) ? { kind: "shinra", id: s.eventId + 1 } : s.mech.event };
+  const next: GameState = { ...s, mech, phase: "COUNTDOWN", shout: false, slot: slot % s.loadout.length, jutsuId: id, seqIndex: 0, countdown: s.party ? PARTY_COUNTDOWN : COUNTDOWN_FROM, jutsuMistakes: 0, eventId: s.eventId + 1 };
+  return { ...next, timeLeftMs: timeLimit(next, j.timeLimitMs) };
+}
+
+/** Party: hand the camera to the other player. */
+function partyNext(s: GameState, lostCombo: boolean): GameState {
+  const p = s.party!;
+  const hp: [number, number] = [...p.hp];
+  if (p.variant === "versus") {
+    hp[p.turn] = s.playerHp;
+    hp[1 - p.turn] = s.bossHp;
+  }
+  const party = { ...p, hp, turn: (1 - p.turn) as 0 | 1, lastCast: lostCombo ? null : p.lastCast };
+  return startRound({ ...s, party, round: s.round + 1 }, s.slot + 1);
 }
 
 /** Enemy hits the player (shield absorbs it). Returns the new state + what happened. */
 function enemyHits(s: GameState, amount: number): { s: GameState; taken: number; blocked: boolean } {
   if (amount <= 0) return { s, taken: 0, blocked: false };
-  if (s.status.shield > 0) return { s: { ...s, status: { ...s.status, shield: s.status.shield - 1 } }, taken: 0, blocked: true };
-  const taken = Math.min(s.playerHp, amount);
+  // Madara's Limbo: invisible shadows walk straight past shields.
+  if (s.status.shield > 0 && s.mech.id !== "limbo") return { s: { ...s, status: { ...s.status, shield: s.status.shield - 1 } }, taken: 0, blocked: true };
+  const taken = Math.min(s.playerHp, Math.max(1, Math.round(amount * (1 - B(s).taken))));
   return { s: { ...s, playerHp: s.playerHp - taken, sage: addSage(s.sage, SAGE_HIT_TAKEN) }, taken, blocked: false };
 }
 
@@ -218,6 +271,8 @@ export function availableJutsu(s: GameState): JutsuId[] {
 
 /** Where the current fight takes place. */
 export function locationFor(s: GameState): Location {
+  // Kaguya tore the arena into one of her dimensions.
+  if (s.mech.shifted) return LOCATIONS.moon;
   if (s.mode === "story" && s.chapter != null) return LOCATIONS[CHAPTERS[s.chapter].location];
   if (s.mode === "survival" && s.survival) return LOCATIONS[QUICK_ROTATION[(s.survival.wave - 1) % QUICK_ROTATION.length]];
   return LOCATIONS[QUICK_ROTATION[(s.round - 1) % QUICK_ROTATION.length]];
@@ -236,15 +291,20 @@ export function enemyAttack(s: GameState): number {
     const w = s.survival.wave;
     base = Math.min(72, 24 + Math.round(w * 2.5)) * (isBossWave(w) ? 1.2 : 1);
   }
-  return Math.round(base * CHAKRA_SCALE * combine(s.mutators).enemyDmgMult * (enraged(s) ? RAGE_MULT : 1));
+  return Math.round(base * CHAKRA_SCALE * combine(s.mutators).enemyDmgMult * (enraged(s) ? RAGE_MULT : 1) * (s.mech.id === "limbo" ? LIMBO_MULT : 1));
 }
 
 function startFight(s: GameState): GameState {
   const heroChakra = (s.characterId && CHARACTERS[s.characterId].chakraMult) || 1;
   const mods = combine(s.mutators);
-  const maxHp = Math.round((s.mode === "duel" ? DUEL_HP : PLAYER_MAX_HP) * hpMult(s.upgrades) * heroChakra * mods.playerHpMult);
+  const b = B(s);
+  const coop = s.party?.variant === "coop";
+  const maxHp = s.party ? (coop ? COOP_TEAM_HP : PARTY_HP) : Math.round((s.mode === "duel" ? DUEL_HP : PLAYER_MAX_HP) * hpMult(U(s)) * heroChakra * mods.playerHpMult * (1 + b.hp));
   return {
     ...s,
+    mech: { ...emptyMech(), id: mechFor(s.mode, s.bossId) },
+    clash: null,
+    party: s.party ? { ...s.party, hp: [PARTY_HP, PARTY_HP], max: [PARTY_HP, PARTY_HP], turn: 0, lastCast: null, team: null, winner: null, dealt: [0, 0] } : null,
     phase: "JUTSU_SELECTION",
     round: 1,
     bossHp: s.bossMaxHp,
@@ -254,8 +314,8 @@ function startFight(s: GameState): GameState {
     lastRound: null,
     lastMistakeCost: null,
     duel: s.duel ? { ...s.duel, ready: false } : null,
-    status: { ...emptyStatus(), shield: startShields(s.upgrades) },
-    sage: mods.sageStart ? SAGE_MAX : 0,
+    status: { ...emptyStatus(), shield: startShields(U(s)) + b.shields },
+    sage: mods.sageStart ? SAGE_MAX : Math.min(SAGE_MAX, b.sageStart),
     slot: 0,
     // Keep the previous picks (handy for a rematch) if they're still available.
     loadout: s.loadout.filter((id) => availableJutsu(s).includes(id)).slice(0, LOADOUT_SIZE),
@@ -329,7 +389,7 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
 
   switch (a.type) {
     case "START":
-      return { ...initialGameState(), phase: "CAMERA_CHECK" };
+      return { ...fresh(s), phase: "CAMERA_CHECK" };
 
     case "CAMERA_READY":
       return { ...s, phase: "READY" };
@@ -339,6 +399,9 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
 
     case "SET_UPGRADES":
       return { ...s, upgrades: a.upgrades };
+
+    case "SET_BONUSES":
+      return { ...s, bonuses: a.bonuses };
 
     case "OPEN_SHOP":
       return { ...s, phase: "SHOP" };
@@ -359,6 +422,7 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
       const r = enemyHits(s, Math.max(0, Math.round(a.amount)));
       return {
         ...r.s,
+        clash: a.clash ? { ...a.clash, id: s.eventId + 1 } : s.clash,
         lastEnemyHit: r.taken > 0 ? { amount: r.taken, id: s.eventId + 1 } : s.lastEnemyHit,
         lastRound: r.blocked ? { burn: 0, summon: 0, retaliation: 0, blocked: true, staggered: false, healed: 0, id: s.eventId + 1 } : s.lastRound,
         eventId: s.eventId + 1,
@@ -377,7 +441,17 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
 
     case "SELECT_MODE":
       if (a.mode === "training") return { ...s, mode: "training", phase: "TRAINING", training: { sign: "RAT", streak: 0, hits: 0, mastered: [] } };
-      return { ...s, mode: a.mode, phase: "CHARACTER_SELECT", mutators: [], survival: null };
+      if (a.mode === "lab") return { ...s, mode: "lab", phase: "LAB" };
+      if (a.mode === "party")
+        return {
+          ...s,
+          mode: "party",
+          phase: "CHARACTER_SELECT",
+          mutators: [],
+          survival: null,
+          party: { variant: a.variant ?? "versus", heroes: [], hp: [PARTY_HP, PARTY_HP], max: [PARTY_HP, PARTY_HP], turn: 0, lastCast: null, team: null, winner: null, dealt: [0, 0] },
+        };
+      return { ...s, mode: a.mode, phase: "CHARACTER_SELECT", mutators: [], survival: null, party: null };
 
     case "TRAIN_SELECT":
       return { ...s, training: { ...s.training!, sign: a.sign, streak: 0 } };
@@ -390,6 +464,15 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
     }
 
     case "SELECT_CHARACTER":
+      if (s.mode === "party" && s.party) {
+        // Player 1 picks, then player 2 picks on the same screen.
+        if (s.party.heroes.length === 0) return { ...s, party: { ...s.party, heroes: [a.id] }, eventId: s.eventId + 1 };
+        const heroes = [s.party.heroes[0], a.id];
+        const party = { ...s.party, heroes };
+        if (party.variant === "versus") return startFight({ ...s, party, characterId: heroes[0], bossId: heroes[1], bossHp: PARTY_HP, bossMaxHp: PARTY_HP });
+        const boss = a.bossId ?? randomBossFor(heroes[0]);
+        return startFight({ ...s, party, characterId: heroes[0], bossId: boss, bossHp: COOP_BOSS_HP, bossMaxHp: COOP_BOSS_HP });
+      }
       if (s.mode === "story") return { ...s, characterId: a.id, phase: "CHAPTER_SELECT" };
       if (s.mode === "duel") return { ...s, characterId: a.id, phase: "LOBBY", duel: null };
       if (s.mode === "survival") {
@@ -404,7 +487,12 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
       return startFight({ ...s, characterId: a.id, bossId: a.bossId ?? bossFor(a.id), bossHp: BOSS.maxHp, bossMaxHp: BOSS.maxHp });
 
     case "CHANGE_CHARACTER":
-      return { ...initialGameState(), mode: s.mode, phase: "CHARACTER_SELECT" };
+      return {
+        ...fresh(s),
+        mode: s.mode,
+        phase: "CHARACTER_SELECT",
+        party: s.party ? { ...s.party, heroes: [], turn: 0, lastCast: null, team: null, winner: null, dealt: [0, 0] } : null,
+      };
 
     case "SELECT_CHAPTER": {
       const ch = CHAPTERS[a.index];
@@ -441,7 +529,7 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
       return { ...s, phase: "CHAPTER_SELECT", dialogue: null, jutsuId: null };
 
     case "BACK_TO_MENU":
-      return { ...initialGameState(), phase: "MODE_SELECT" };
+      return { ...fresh(s), phase: "MODE_SELECT" };
 
     case "SELECT_JUTSU": {
       // Shortcut: fight with this jutsu first, the rest of the loadout auto-filled.
@@ -479,7 +567,7 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
     case "TICK": {
       const timeLeftMs = s.timeLeftMs - a.dt;
       const stats = { ...s.stats, playMs: s.stats.playMs + a.dt };
-      if (timeLeftMs <= 0 && s.mode === "duel") {
+      if (timeLeftMs <= 0 && (s.mode === "duel" || s.party?.variant === "versus")) {
         // Duel: the jutsu fizzles — no AI strike, the other player is busy casting too.
         return { ...s, timeLeftMs: 0, phase: "FAILED", eventId: s.eventId + 1, lastEnemyHit: null, stats: { ...stats, combo: 0, failedCount: stats.failedCount + 1 } };
       }
@@ -498,9 +586,10 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
       return { ...s, timeLeftMs, stats };
     }
 
+
     case "SIGN": {
-      const j = s.jutsuId ? JUTSU[s.jutsuId] : null;
-      if (!j || j.sequence[s.seqIndex] !== a.sign) return s;
+      const seq = currentSequence(s);
+      if (!seq.length || seq[s.seqIndex] !== a.sign) return s;
       const combo = s.stats.combo + 1;
       const pts = pointsForSign(combo);
       const seqIndex = s.seqIndex + 1;
@@ -515,15 +604,15 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
         ...s,
         seqIndex,
         stats,
-        sage: addSage(s.sage, SAGE_PER_SEAL),
+        sage: addSage(s.sage, SAGE_PER_SEAL + B(s).sageSeal),
         eventId: s.eventId + 1,
         lastPoints: { ...pts, id: s.eventId + 1 },
-        phase: seqIndex >= j.sequence.length ? "SUCCESS" : "PLAYING",
+        phase: seqIndex >= seq.length ? "SUCCESS" : "PLAYING",
       };
     }
 
     case "MISTAKE": {
-      const want = s.jutsuId ? JUTSU[s.jutsuId].sequence[s.seqIndex] : null;
+      const want = currentSequence(s)[s.seqIndex] ?? null;
       const weak = want ? { ...s.stats.weak, [want]: (s.stats.weak[want] ?? 0) + 1 } : s.stats.weak;
       // A wrong seal backfires: chakra AND time are lost.
       const hp = Math.min(s.playerHp, mistakeCost(s));
@@ -534,6 +623,7 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
         timeLeftMs: Math.max(1, s.timeLeftMs - MISTAKE_TIME_MS),
         lastMistakeCost: { hp, ms: MISTAKE_TIME_MS, id: s.eventId + 1 },
         phase: playerHp <= 0 ? "DEFEAT" : s.phase,
+        party: playerHp <= 0 && s.party?.variant === "versus" ? { ...s.party, winner: (1 - s.party.turn) as 0 | 1 } : s.party,
         jutsuMistakes: s.jutsuMistakes + 1,
         sage: addSage(s.sage, -SAGE_MISTAKE),
         eventId: s.eventId + 1,
@@ -547,10 +637,52 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
       const perfect = s.jutsuMistakes === 0;
       const e = j.effect;
       const tags: string[] = [];
-      let mult = damageMultiplier(hero, j.element) * powerMult(s.upgrades);
+      const b = B(s);
+      let mult = damageMultiplier(hero, j.element) * powerMult(U(s));
       let status = { ...s.status };
       let playerHp = s.playerHp;
       mult *= combine(s.mutators).playerDmgMult * (1 + (s.survival?.dmgBonus ?? 0));
+      mult *= 1 + b.dmg + (b.el[j.element] ?? 0);
+      if (perfect && b.perfect) mult *= 1 + b.perfect;
+      if (b.execute && s.bossHp <= s.bossMaxHp * RAGE_AT) mult *= 1 + b.execute;
+      // Boss mechanics.
+      let mech = s.mech;
+      if (mech.genjutsu) {
+        mult *= 1.15;
+        tags.push("genjutsu");
+      }
+      if (mech.id === "hearts") {
+        if (mech.lastEl === j.element) {
+          mult *= HEART_SAME;
+          tags.push("resisted");
+          mech = { ...mech, event: { kind: "resisted", id: s.eventId + 1 } };
+        } else if (mech.lastEl) {
+          mult *= HEART_NEW;
+          tags.push("heart");
+          mech = { ...mech, event: { kind: "heart", id: s.eventId + 1 } };
+        }
+        mech = { ...mech, lastEl: j.element };
+      }
+      if (mech.id === "shinra" && isShinraRound(s.round) && !perfect && !hasFlag(b, "noShinra")) {
+        mult *= SHINRA_MULT;
+        tags.push("repelled");
+        mech = { ...mech, event: { kind: "repelled", id: s.eventId + 1 } };
+      }
+      // Co-op party: two different jutsu back-to-back from the two players fuse.
+      let party = s.party;
+      if (party?.variant === "coop") {
+        const prev = party.lastCast;
+        const combo = prev && prev.turn !== party.turn ? teamCombo(prev.jutsu, j.id) : null;
+        if (combo && prev) {
+          mult *= combo.mult;
+          tags.push("team");
+        }
+        party = {
+          ...party,
+          lastCast: combo ? null : { turn: party.turn, jutsu: j.id },
+          team: combo && prev ? { id: combo.id, turn: party.turn, a: prev.jutsu, b: j.id, eventId: s.eventId + 1 } : party.team,
+        };
+      }
       if (s.shout) {
         mult *= SHOUT_MULT;
         tags.push("shout");
@@ -588,7 +720,7 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
         tags.push("boost");
       }
       if (e.kind === "burn") {
-        status.burn = { dmg: e.dmg, turns: e.turns };
+        status.burn = { dmg: Math.round(e.dmg * (1 + b.burn)), turns: e.turns };
         tags.push("burn");
       }
       if (e.kind === "summon") {
@@ -605,12 +737,29 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
         tags.push("recoil");
       }
       const bossHp = Math.max(0, s.bossHp - damage);
+      const dealt = s.bossHp - bossHp;
+      if (b.healCast || b.lifesteal) {
+        const heal = Math.round(s.playerMaxHp * b.healCast + dealt * b.lifesteal);
+        if (heal > 0 && playerHp < s.playerMaxHp) {
+          playerHp = Math.min(s.playerMaxHp, playerHp + heal);
+          tags.push("drain");
+        }
+      }
+      if (mech.id === "dimension" && !mech.shifted && bossHp > 0 && bossHp <= s.bossMaxHp / 2) mech = { ...mech, shifted: true, event: { kind: "shift", id: s.eventId + 1 } };
+      if (party) {
+        const d: [number, number] = [...party.dealt];
+        d[party.turn] += dealt;
+        party = { ...party, dealt: d };
+      }
       return {
         ...s,
         phase: "JUTSU_CAST",
         bossHp,
         playerHp,
         status,
+        mech,
+        party,
+        eventId: s.eventId + 1,
         // A full gauge is spent on this cast; otherwise a perfect cast charges it further.
         sage: sageCast ? 0 : addSage(s.sage, r.perfect ? SAGE_PERFECT : 0),
         shout: false,
@@ -626,8 +775,9 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
     }
 
     case "CAST_DONE": {
+      const won = (x: GameState): GameState => ({ ...x, phase: "VICTORY", party: x.party ? { ...x.party, winner: x.party.variant === "versus" ? x.party.turn : null } : null });
       if (s.bossHp <= 0 && s.mode === "survival") return clearWave(s);
-      if (s.bossHp <= 0 && s.mode !== "duel") return { ...s, phase: "VICTORY" };
+      if (s.bossHp <= 0 && s.mode !== "duel") return won(s);
       // End of round: damage over time, then the enemy answers.
       let st = s;
       let status = { ...s.status };
@@ -641,13 +791,30 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
         summon = status.summon.dmg;
         status.summon = status.summon.turns > 1 ? { ...status.summon, turns: status.summon.turns - 1 } : null;
       }
-      const bossHp = Math.max(0, s.bossHp - burn - summon);
-      st = { ...st, status, bossHp, stats: { ...st.stats, totalDamage: st.stats.totalDamage + (s.bossHp - bossHp) } };
-      const report = { burn, summon, retaliation: 0, blocked: false, staggered: false, healed: 0, id: s.eventId + 1 };
+      let bossHp = Math.max(0, s.bossHp - burn - summon);
+      let regen = 0;
+      // Orochimaru sheds his skin and recovers a little every round.
+      if (s.mech.id === "shedding" && bossHp > 0) {
+        regen = Math.min(SHED_HP, s.bossMaxHp - bossHp);
+        bossHp += regen;
+      }
+      let mech = st.mech;
+      if (mech.id === "dimension" && !mech.shifted && bossHp > 0 && bossHp <= s.bossMaxHp / 2) mech = { ...mech, shifted: true, event: { kind: "shift", id: s.eventId + 1 } };
+      if (regen) mech = { ...mech, event: { kind: "regen", id: s.eventId + 1 } };
+      let party = st.party;
+      if (party && burn + summon > 0) {
+        const d: [number, number] = [...party.dealt];
+        d[party.turn] += Math.min(s.bossHp, burn + summon);
+        party = { ...party, dealt: d };
+      }
+      st = { ...st, status, bossHp, mech, party, stats: { ...st.stats, totalDamage: st.stats.totalDamage + Math.max(0, s.bossHp - bossHp) } };
+      const report = { burn, summon, retaliation: 0, blocked: false, staggered: false, healed: 0, regen, id: s.eventId + 1 };
       // Duel: the win is decided by the opponent's own client (it reports its KO); no AI retaliation.
       if (s.mode === "duel") return { ...st, phase: "NEXT_ROUND", lastRound: report, eventId: s.eventId + 1 };
       if (bossHp <= 0 && s.mode === "survival") return clearWave({ ...st, lastRound: report, eventId: s.eventId + 1 });
-      if (bossHp <= 0) return { ...st, phase: "VICTORY", lastRound: report, eventId: s.eventId + 1 };
+      if (bossHp <= 0) return won({ ...st, lastRound: report, eventId: s.eventId + 1 });
+      // Party versus: the other player doesn't strike back — it's their turn next.
+      if (s.party?.variant === "versus") return { ...st, phase: "NEXT_ROUND", lastRound: report, eventId: s.eventId + 1 };
       // A perfect jutsu staggers the enemy; otherwise it retaliates.
       if (s.lastCast?.perfect) {
         return { ...st, phase: "NEXT_ROUND", lastRound: { ...report, staggered: true }, eventId: s.eventId + 1 };
@@ -663,12 +830,15 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
     }
 
     case "NEXT_ROUND_DONE":
+      if (s.party) return partyNext(s, false);
       return startRound({ ...s, round: s.round + 1 }, s.slot + 1);
 
     case "RETRY":
+      if (s.party) return partyNext(s, true);
       return startRound(s, s.slot);
 
     case "BACK_TO_SELECTION":
+      if (s.party) return partyNext(s, true);
       // "Next jutsu": move on to the next of the three.
       return startRound(s, s.slot + 1);
 
@@ -699,6 +869,6 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
       return startFight({ ...s, bossHp: s.bossMaxHp, eventId: s.eventId + 1 });
 
     case "QUIT":
-      return initialGameState();
+      return fresh(s);
   }
 }

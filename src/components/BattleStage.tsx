@@ -9,6 +9,9 @@ import type { Location } from "@/lib/game/locations";
 import { t, tr } from "@/lib/i18n";
 import { SAGE_MAX, isBossWave } from "@/lib/game/gameState";
 import { MUTATORS } from "@/lib/game/mutators";
+import { MECHANICS } from "@/lib/game/bosses";
+import { ITEMS } from "@/lib/game/items";
+import { TITLES } from "@/lib/game/pass";
 import { ArenaBackdrop } from "./ArenaBackdrop";
 import { Portrait } from "./Portrait";
 
@@ -47,14 +50,18 @@ export const BattleStage = forwardRef<HTMLDivElement, Props>(function BattleStag
   const boss = g.bossId ? CHARACTERS[g.bossId] : null;
   const shadow = !!boss && boss.id === hero?.id;
   const duel = g.mode === "duel";
-  const foeName = duel && g.duel ? g.duel.opponentNick : boss ? (shadow ? t("shadowOf", { name: tr(boss.name) }) : tr(boss.name)) : "???";
+  const party = g.party;
+  const versus = party?.variant === "versus";
+  const foeName = duel && g.duel ? g.duel.opponentNick : boss ? (shadow && !versus ? t("shadowOf", { name: tr(boss.name) }) : tr(boss.name)) : "???";
+  const mech = g.mech.id ? MECHANICS[g.mech.id] : null;
+  const gear = party ? [] : [profile.eye, profile.weapon].filter((x): x is NonNullable<typeof x> => !!x).map((id) => ITEMS[id]);
   const clock = g.phase === "PLAYING" ? Math.ceil(g.timeLeftMs / 1000) : g.phase === "COUNTDOWN" ? g.countdown : "∞";
   const urgent = g.phase === "PLAYING" && g.timeLeftMs <= 5000;
   const victory = g.phase === "VICTORY" || g.phase === "WAVE_CLEAR";
   const defeat = g.phase === "DEFEAT";
 
   return (
-    <div className={`mk-stage ${victory ? "won" : ""} ${defeat ? "lost" : ""}`}>
+    <div className={`mk-stage ${victory ? "won" : ""} ${defeat ? "lost" : ""} ${g.mech.genjutsu && ["COUNTDOWN", "PLAYING"].includes(g.phase) ? "genjutsu" : ""} ${g.mech.shifted ? "shifted" : ""}`}>
       <ArenaBackdrop location={location} showName={false} />
       <div className="mk-vignette" aria-hidden />
 
@@ -72,7 +79,12 @@ export const BattleStage = forwardRef<HTMLDivElement, Props>(function BattleStag
             </div>
             <div className="mk-name">
               {hero ? tr(hero.name).toUpperCase() : "—"}
-              {profile.nick && <em>{profile.nick}</em>}
+              {party ? <em>{t("playerN", { n: party.turn + 1 })}</em> : profile.nick && <em>{profile.nick}</em>}
+              {!party && profile.title && <i className="mk-title">{tr(TITLES[profile.title])}</i>}
+              {gear.map((it) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={it.id} src={it.image} alt={tr(it.name)} title={tr(it.name)} className={`mk-gear ${it.slot}`} />
+              ))}
             </div>
           </div>
         </div>
@@ -88,16 +100,22 @@ export const BattleStage = forwardRef<HTMLDivElement, Props>(function BattleStag
           )}
           <b key={String(clock)}>{clock}</b>
           <span>
-            {g.mode === "survival" && g.survival ? `${t("wave")} ${g.survival.wave}` : `${t("round")} ${g.round}`}
+            {party ? t("playerTurnShort", { n: party.turn + 1 }) : g.mode === "survival" && g.survival ? `${t("wave")} ${g.survival.wave}` : `${t("round")} ${g.round}`}
           </span>
         </div>
         <div className="mk-side r">
           <div className="mk-info">
             <FightBar hp={g.bossHp} max={g.bossMaxHp} side="r" delayMs={hpDelayMs} />
             <div className="mk-name">
-              {boss && !duel && <em>{tr(boss.title)}</em>}
+              {versus && party ? <em>{t("playerN", { n: 2 - party.turn })}</em> : boss && !duel && <em>{tr(boss.title)}</em>}
               {foeName.toUpperCase()}
             </div>
+            {mech && (
+              <div className={`mk-mech ${g.mech.genjutsu || g.mech.shifted ? "active" : ""}`} title={tr(mech.desc)} data-mech={mech.id}>
+                <b>{mech.kanji}</b> {tr(mech.name)}
+                <span>{tr(mech.desc)}</span>
+              </div>
+            )}
           </div>
           {boss && <Portrait ch={boss} className="mk-face" />}
         </div>
@@ -165,7 +183,7 @@ export function Announcer() {
   useEffect(() => {
     const p = prev.current;
     prev.current = g;
-    if (g.phase === p.phase && g.bossHp === p.bossHp) return;
+    if (g.phase === p.phase && g.bossHp === p.bossHp && g.mech.event?.id === p.mech.event?.id) return;
 
     if (g.phase === "COUNTDOWN" && p.phase !== "COUNTDOWN") {
       if (g.round === 1) {
@@ -195,6 +213,12 @@ export function Announcer() {
       say(flawless ? t("annFlawless") : t("annWin"), flawless ? "flawless" : "win", 1400, 1550, flawless ? "flawless" : undefined);
     }
     if (g.phase === "DEFEAT" && p.phase !== "DEFEAT") say(t("annLose"), "lose", 1500, 250);
+    const ev = g.mech.event;
+    if (ev && ev.id !== p.mech.event?.id) {
+      const text = { genjutsu: t("mechGenjutsu"), shift: t("mechShift"), shinra: t("mechShinra"), repelled: t("mechRepelled"), regen: t("mechRegen"), resisted: t("mechResisted"), heart: t("mechHeart") }[ev.kind];
+      const delay = ev.kind === "genjutsu" || ev.kind === "shinra" ? (g.round === 1 ? 2000 : 250) : 400;
+      say(text, "mech", 1500, delay, ev.kind === "shift" || ev.kind === "genjutsu" ? "finish" : undefined);
+    }
     if (g.phase === "WAVE_CLEAR" && p.phase !== "WAVE_CLEAR") say(t("annKo"), "ko", 1100, 300);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [g]);

@@ -9,6 +9,7 @@ import { locationFor } from "@/lib/game/gameState";
 import { accuracy, rankFor } from "@/lib/game/scoring";
 import { drawBattleCard } from "@/lib/card";
 import { t, tr } from "@/lib/i18n";
+import { FRAMES, TITLES } from "@/lib/game/pass";
 
 /** "Battle card" button: draws a shareable PNG of the fight and shows it with a download link. */
 export function ShareCard({ win }: { win: boolean }) {
@@ -46,6 +47,8 @@ export function ShareCard({ win }: { win: boolean }) {
         [t("cardCast"), String(s.castCount)],
       ],
       nick: profile.nick,
+      title: profile.title ? tr(TITLES[profile.title]) : null,
+      frame: profile.frame ? { colors: FRAMES[profile.frame].colors, kanji: FRAMES[profile.frame].kanji } : null,
       mySealLabel: t("mySeal"),
       win,
     });

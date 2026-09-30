@@ -18,6 +18,9 @@ import { Announcer, BattleStage } from "./BattleStage";
 import { castJutsu, enemyStrike, point } from "@/lib/fx/jutsuAnim";
 import { HandCursor } from "./HandCursor";
 import { AchievementToasts } from "./Achievements";
+import { LevelToasts } from "./PathScreen";
+import { Lab } from "./Lab";
+import { ClashBanner, PartyResult, PartyTurn, TeamComboBanner } from "./Party";
 import { BoonPicker } from "./BoonPicker";
 import { ArenaBackdrop } from "./ArenaBackdrop";
 import { CharacterSelect } from "./CharacterSelect";
@@ -25,7 +28,7 @@ import { ChapterSelect } from "./ChapterSelect";
 import { DialogueBox } from "./DialogueBox";
 import { ModeSelect } from "./ModeSelect";
 import { Portrait } from "./Portrait";
-import { locationFor } from "@/lib/game/gameState";
+import { currentSequence, locationFor } from "@/lib/game/gameState";
 import { CHAPTERS } from "@/lib/game/story";
 import { getLang, t, tr } from "@/lib/i18n";
 import { VoiceListener, matchShout, voiceSupported } from "@/lib/audio/voice";
@@ -244,7 +247,7 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
     const j = g.jutsuId ? JUTSU[g.jutsuId] : null;
 
     if (g.stats.correctSigns > p.stats.correctSigns && j) {
-      const sign = j.sequence[g.seqIndex - 1];
+      const sign = currentSequence(g)[g.seqIndex - 1] ?? j.sequence[0];
       fx.current?.seal(center(panelRef.current, 0.42).x, center(panelRef.current, 0.42).y, j.element);
       const mult = comboMultiplier(g.stats.combo);
       setPop({ kanji: SIGNS[sign].kanji, points: g.lastPoints?.amount ?? 100, mult, key: g.eventId });
@@ -417,7 +420,7 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
   const hero = g.characterId ? CHARACTERS[g.characterId] : null;
   const casting = g.phase === "SUCCESS" || g.phase === "JUTSU_CAST";
   const hpDelay = g.phase === "JUTSU_CAST" && g.jutsuId ? impactMs(g.jutsuId) : 0;
-  const mk = g.mode !== "training" && !!g.bossId && FIGHT_PHASES.includes(g.phase);
+  const mk = g.mode !== "training" && g.mode !== "lab" && !!g.bossId && FIGHT_PHASES.includes(g.phase);
   const location = locationFor(g);
 
   return (
@@ -471,7 +474,9 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
         </section>
 
         <section className="col-side">
-          {g.phase === "TRAINING" ? (
+          {g.phase === "LAB" ? (
+            <Lab frameRef={lastFrame} />
+          ) : g.phase === "TRAINING" ? (
             <Dojo />
           ) : mk ? (
             <>
@@ -514,7 +519,10 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
       {g.phase === "CHAPTER_SELECT" && <ChapterSelect />}
       {g.phase === "DIALOGUE" && <DialogueBox />}
       {g.phase === "JUTSU_SELECTION" && <JutsuSelect />}
-      {g.phase === "FAILED" && g.mode !== "duel" && <FailedPanel />}
+      {g.phase === "FAILED" && g.mode !== "duel" && g.mode !== "party" && <FailedPanel />}
+      <PartyTurn />
+      <TeamComboBanner />
+      <ClashBanner />
       {casting && j && (
         <div className="cast-banner">
           {hero && <Portrait ch={hero} className="cb-hero" />}
@@ -591,8 +599,9 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
           </div>
         </div>
       )}
-      {g.phase === "VICTORY" && showResult && <ResultScreen onExit={quit} />}
-      {g.phase === "DEFEAT" && showResult && <DefeatPanel onExit={quit} />}
+      {g.phase === "VICTORY" && showResult && g.mode !== "party" && <ResultScreen onExit={quit} />}
+      {g.phase === "DEFEAT" && showResult && g.mode !== "party" && <DefeatPanel onExit={quit} />}
+      {(g.phase === "VICTORY" || g.phase === "DEFEAT") && showResult && g.mode === "party" && <PartyResult onExit={quit} />}
       {g.phase === "DEFEAT" && <div className="defeat-vignette" aria-hidden />}
 
       {audioToast && (
@@ -607,6 +616,7 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
       <canvas ref={fxCanvas} className="fx-canvas" aria-hidden />
       <HandCursor />
       <AchievementToasts />
+      <LevelToasts />
     </div>
   );
 }

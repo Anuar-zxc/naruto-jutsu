@@ -10,7 +10,7 @@
  */
 import type { GameAction, GameState, Phase } from "@/types/game";
 import type { Correction, RecognitionFrame, SignId } from "@/types/gestures";
-import { TRAIN_MASTERY, gameReducer, initialGameState } from "./gameState";
+import { TRAIN_MASTERY, currentSequence, gameReducer, initialGameState } from "./gameState";
 import { rankFor } from "./scoring";
 import { JUTSU, impactMs } from "./jutsu";
 import { isComboMilestone } from "./combo";
@@ -28,6 +28,13 @@ import { CHARACTERS, survivalBossFor } from "./characters";
 import { ACHIEVEMENTS, emptyCounters, isDone, type Achievement, type Counters } from "./achievements";
 import { dailyFor, todayKey } from "./mutators";
 import { UPGRADES } from "./profile";
+import { sumBonuses, type Bonuses } from "./bonuses";
+import { CLANS, CLAN_SWITCH_COST, canLearn, clanBonuses, spentPoints, type ClanId } from "./clans";
+import { ITEMS, type ItemId, type ItemSlot } from "./items";
+import { levelFor, rewardFor, xpFor, type FrameId, type PassReward, type TitleId } from "./pass";
+import { CLASH_WINDOW_MS } from "./party";
+import { submitScore } from "@/lib/net/leaderboard";
+import type { JutsuId } from "@/types/game";
 
 const LS_PROFILE = "shinobi.profile";
 
@@ -206,6 +213,7 @@ export class GameSession {
   }
   private recordKey(s: GameState) {
     if (s.mode === "duel") return "duel";
+    if (s.mode === "party") return "party";
     if (s.mode === "daily") return `daily:${todayKey()}`;
     return s.mode === "story" && s.chapter != null ? `story:${s.chapter}` : "quick";
   }
@@ -257,6 +265,9 @@ export class GameSession {
       c.wins = Math.max(c.wins, this.profile.wins);
       c.duelWins = Math.max(c.duelWins, this.profile.duelsWon);
       c.maxRyo = Math.max(c.maxRyo, this.profile.ryo);
+      c.level = Math.max(c.level, levelFor(this.profile.xp));
+      c.itemsOwned = Math.max(c.itemsOwned, this.profile.owned.length);
+      if (this.profile.clan) c.clanJoined = 1;
     });
   }
   /** Update lifetime counters, persist, and unlock whatever became true. */
@@ -295,6 +306,10 @@ export class GameSession {
     this.achSubs.forEach((f) => f());
   }
   private trackFight(s: GameState, win: boolean) {
+    if (s.mode === "party") {
+      this.bump((c) => (c.partyGames += 1));
+      return;
+    }
     this.bump((c) => {
       c.fights += 1;
       c.bestCombo = Math.max(c.bestCombo, s.stats.maxCombo);
@@ -396,7 +411,98 @@ export class GameSession {
       /* storage unavailable */
     }
     this.dispatch({ type: "SET_UPGRADES", upgrades: p.upgrades });
+    this.dispatch({ type: "SET_BONUSES", bonuses: this.bonusesOf(p) });
     this.profileSubs.forEach((f) => f());
+  }
+  /** Everything permanent summed: clan passive + talents + eye + weapon. */
+  bonusesOf(p: Profile = this.profile): Bonuses {
+    return sumBonuses([...clanBonuses(p.clan, p.talents), p.eye ? ITEMS[p.eye].bonus : null, p.weapon ? ITEMS[p.weapon].bonus : null]);
+  }
+
+  // --- clans & talents ------------------------------------------------------------
+  /** Talent points = shinobi level. */
+  talentPoints = () => levelFor(this.profile.xp);
+  freePoints = () => this.talentPoints() - spentPoints(this.profile.clan, this.profile.talents);
+  joinClan(id: ClanId): boolean {
+    const p = this.profile;
+    if (p.clan === id) return false;
+    const cost = p.clan ? CLAN_SWITCH_COST : 0;
+    if (p.ryo < cost) return false;
+    this.setProfile({ ...p, clan: id, talents: [], ryo: p.ryo - cost });
+    this.bump((c) => (c.clanJoined = 1));
+    return true;
+  }
+  learnTalent(id: string): boolean {
+    const p = this.profile;
+    if (!canLearn(p.clan, p.talents, id, this.talentPoints())) return false;
+    const talents = [...p.talents, id];
+    this.setProfile({ ...p, talents });
+    const cap = p.clan ? CLANS[p.clan].talents.find((x) => x.tier === 4)?.id : null;
+    this.bump((c) => {
+      c.talents = Math.max(c.talents, talents.length);
+      if (cap && talents.includes(cap)) c.capstone = 1;
+    });
+    return true;
+  }
+  resetTalents() {
+    this.setProfile({ ...this.profile, talents: [] });
+  }
+
+  // --- armory -------------------------------------------------------------------
+  buyItem(id: ItemId): boolean {
+    const p = this.profile;
+    const it = ITEMS[id];
+    if (p.owned.includes(id) || p.ryo < it.price) return false;
+    const owned = [...p.owned, id];
+    // A new item is equipped straight away if that slot is empty.
+    const slotKey = it.slot === "eye" ? "eye" : "weapon";
+    this.setProfile({ ...p, ryo: p.ryo - it.price, owned, [slotKey]: p[slotKey] ?? id });
+    this.bump((c) => (c.itemsOwned = Math.max(c.itemsOwned, owned.length)));
+    return true;
+  }
+  equip(id: ItemId) {
+    const p = this.profile;
+    if (!p.owned.includes(id)) return;
+    const slotKey = ITEMS[id].slot === "eye" ? "eye" : "weapon";
+    this.setProfile({ ...p, [slotKey]: p[slotKey] === id ? null : id });
+  }
+  unequip(slot: ItemSlot) {
+    this.setProfile({ ...this.profile, [slot === "eye" ? "eye" : "weapon"]: null });
+  }
+
+  // --- Shinobi Path (season pass) -------------------------------------------------
+  /** XP earned by the fight that just ended (for the result screen). */
+  lastXp: { gained: number; levelUps: { level: number; reward: PassReward }[] } | null = null;
+  levelToasts: { level: number; reward: PassReward; key: number }[] = [];
+  addXp(n: number) {
+    const p = this.profile;
+    const gained = Math.round(n * (1 + this.bonusesOf(p).xp));
+    if (gained <= 0) return (this.lastXp = { gained: 0, levelUps: [] });
+    const xp = p.xp + gained;
+    const lvl = levelFor(xp);
+    const levelUps: { level: number; reward: PassReward }[] = [];
+    let next: Profile = { ...p, xp };
+    for (let l = p.passPaid + 1; l <= lvl; l++) {
+      const r = rewardFor(l);
+      levelUps.push({ level: l, reward: r });
+      if (r.kind === "ryo") next = { ...next, ryo: next.ryo + r.n };
+      if (r.kind === "title") next = { ...next, title: r.id };
+      if (r.kind === "frame" && !next.frame) next = { ...next, frame: r.id };
+    }
+    next = { ...next, passPaid: Math.max(p.passPaid, lvl) };
+    this.setProfile(next);
+    this.lastXp = { gained, levelUps };
+    if (levelUps.length) {
+      this.levelToasts = [...this.levelToasts.slice(-3), ...levelUps.map((u) => ({ ...u, key: Date.now() + Math.random() }))];
+      setTimeout(() => this.sfx.mastered(), 600);
+    }
+    this.bump((c) => (c.level = Math.max(c.level, lvl)));
+  }
+  setTitle(id: TitleId | null) {
+    this.setProfile({ ...this.profile, title: id });
+  }
+  setFrame(id: FrameId | null) {
+    this.setProfile({ ...this.profile, frame: id });
   }
   setNick(raw: string) {
     const nick = cleanNick(raw);
@@ -423,6 +529,7 @@ export class GameSession {
   private heartbeat: ReturnType<typeof setInterval> | null = null;
   private lastHeard = 0;
   private stopHosting: (() => void) | null = null;
+  private lastLocalCast: { t: number; jutsu: JutsuId; damage: number } | null = null;
   getDuel = () => this.duelUi;
   subscribeDuel = (fn: () => void) => {
     this.duelSubs.add(fn);
@@ -527,9 +634,17 @@ export class GameSession {
       case "go":
         this.dispatch({ type: "DUEL_BEGIN" });
         break;
-      case "hit":
-        this.dispatch({ type: "REMOTE_HIT", amount: m.amount });
+      case "hit": {
+        // Two jutsu that meet mid-air collide: yours absorbs half its power from theirs.
+        const mine = this.lastLocalCast;
+        if (m.jutsu && mine && Date.now() - mine.t < CLASH_WINDOW_MS) {
+          this.lastLocalCast = null;
+          const absorbed = Math.min(m.amount, Math.round(mine.damage * 0.5));
+          this.sfx.impact(true);
+          this.dispatch({ type: "REMOTE_HIT", amount: m.amount - absorbed, clash: { mine: mine.jutsu, theirs: m.jutsu, absorbed } });
+        } else this.dispatch({ type: "REMOTE_HIT", amount: m.amount });
         break;
+      }
       case "hp":
         this.dispatch({ type: "REMOTE_HP", hp: m.hp, max: m.max });
         break;
@@ -631,6 +746,8 @@ export class GameSession {
         if (perfect) c.perfectCasts += 1;
         if (tags.includes("sage")) c.sageCasts += 1;
         if (tags.includes("shout")) c.shouts += 1;
+        if (tags.includes("genjutsu")) c.genjutsuBroken += 1;
+        if (tags.includes("team")) c.teamCombos += 1;
         c.bestCombo = Math.max(c.bestCombo, next.stats.maxCombo);
       });
     }
@@ -647,7 +764,10 @@ export class GameSession {
 
   /** Mirror local duel events to the other player. */
   private duelSync(prev: GameState, next: GameState, a: GameAction) {
-    if (next.phase === "JUTSU_CAST" && prev.phase !== "JUTSU_CAST" && next.lastCast) this.send({ t: "hit", amount: next.lastCast.damage, jutsu: next.lastCast.jutsuId });
+    if (next.phase === "JUTSU_CAST" && prev.phase !== "JUTSU_CAST" && next.lastCast) {
+      this.lastLocalCast = { t: Date.now(), jutsu: next.lastCast.jutsuId, damage: next.lastCast.damage };
+      this.send({ t: "hit", amount: next.lastCast.damage, jutsu: next.lastCast.jutsuId });
+    }
     if (a.type === "CAST_DONE" && next.lastRound && next.lastRound.burn + next.lastRound.summon > 0) this.send({ t: "hit", amount: next.lastRound.burn + next.lastRound.summon });
     if (next.playerHp !== prev.playerHp || next.playerMaxHp !== prev.playerMaxHp) this.send({ t: "hp", hp: next.playerHp, max: next.playerMaxHp });
     if (next.phase === "DEFEAT" && prev.phase !== "DEFEAT" && a.type !== "DUEL_RESULT") this.send({ t: "ko" });
@@ -712,7 +832,7 @@ export class GameSession {
         this.schedule(TIMING.nextRound, () => this.dispatch({ type: "NEXT_ROUND_DONE" }));
         break;
       case "FAILED":
-        if (this.state.mode === "duel") {
+        if (this.state.mode === "duel" || this.state.mode === "party") {
           // No pause in a duel: the jutsu fizzles and the next one comes up.
           this.sfx.fail();
           this.schedule(1300, () => this.dispatch({ type: "BACK_TO_SELECTION" }));
@@ -729,6 +849,9 @@ export class GameSession {
           // Wave rewards were banked as they were earned; just record the run.
           this.commitSurvival(this.state);
           this.lastReward = this.state.survival?.earned ?? 0;
+          const waves = this.lastSurvival?.waves ?? 0;
+          this.addXp(xpFor({ win: false, rank: "C", mode: "survival", waves }));
+          if (waves > 0) void submitScore("survival", this.profile.nick, waves, this.state.characterId ?? "naruto");
         } else this.payout(false);
         break;
       case "WAVE_CLEAR": {
@@ -783,9 +906,13 @@ export class GameSession {
         /* storage unavailable */
       }
     }
+    if (s.mode !== "party") n = Math.round(n * (1 + this.bonusesOf().ryo));
     this.lastReward = n;
     const p = this.profile;
-    this.setProfile({ ...p, ryo: p.ryo + n, wins: p.wins + (win ? 1 : 0), duelsWon: p.duelsWon + (win && s.mode === "duel" ? 1 : 0) });
+    const counts = s.mode !== "party";
+    this.setProfile({ ...p, ryo: p.ryo + n, wins: p.wins + (win && counts ? 1 : 0), duelsWon: p.duelsWon + (win && s.mode === "duel" ? 1 : 0) });
+    this.addXp(xpFor({ win, rank: rankFor(s.stats), mode: s.mode }));
+    if (s.mode === "daily" && win) void submitScore(`daily:${todayKey()}`, this.profile.nick, s.stats.score, s.characterId ?? "naruto");
   }
 
   private startTicking() {
@@ -849,7 +976,7 @@ export class GameSession {
 
   private handlePlaying(frame: RecognitionFrame, t: number): SignId {
     const s = this.state;
-    const seq = JUTSU[s.jutsuId!].sequence;
+    const seq = currentSequence(s);
     const expected = seq[s.seqIndex];
     const prevSign = s.seqIndex > 0 ? seq[s.seqIndex - 1] : null;
 

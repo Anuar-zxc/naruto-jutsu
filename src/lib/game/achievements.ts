@@ -28,6 +28,15 @@ export interface Counters {
   winsWith: CharacterId[];
   beaten: CharacterId[];
   boonsPicked: number;
+  /** v20: clans, armory, pass, party. */
+  clanJoined: number;
+  talents: number;
+  capstone: number;
+  itemsOwned: number;
+  teamCombos: number;
+  partyGames: number;
+  level: number;
+  genjutsuBroken: number;
 }
 
 export const emptyCounters = (): Counters => ({
@@ -53,9 +62,17 @@ export const emptyCounters = (): Counters => ({
   winsWith: [],
   beaten: [],
   boonsPicked: 0,
+  clanJoined: 0,
+  talents: 0,
+  capstone: 0,
+  itemsOwned: 0,
+  teamCombos: 0,
+  partyGames: 0,
+  level: 1,
+  genjutsuBroken: 0,
 });
 
-export type AchCategory = "battle" | "mastery" | "story" | "survival" | "world";
+export type AchCategory = "battle" | "mastery" | "story" | "survival" | "world" | "path";
 
 export interface Achievement {
   id: string;
@@ -120,6 +137,17 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: "otsutsuki", kanji: "月", cat: "world", name: { ru: "Богоборец", en: "God Slayer" }, desc: { ru: "Победи Кагую, Момошики, Иссики и Индру", en: "Defeat Kaguya, Momoshiki, Isshiki and Indra" }, reward: 800, progress: has(OTSUTSUKI) },
   { id: "legends", kanji: "斑", cat: "world", name: { ru: "Тень легенд", en: "Shadow of Legends" }, desc: { ru: "Победи Мадару, Обито Шести Путей, Данзо и Орочимару", en: "Defeat Madara, Six Paths Obito, Danzō and Orochimaru" }, reward: 800, progress: has(KAGE) },
   { id: "creator", kanji: "創", cat: "world", name: { ru: "Рука создателя", en: "The Creator's Hand" }, desc: { ru: "Победи за Ануара", en: "Win as Anuar" }, reward: 100, progress: (c) => [c.winsWith.includes("anuar") ? 1 : 0, 1] },
+  // path: clans, armory, season pass, party
+  { id: "clan_join", kanji: "族", cat: "path", name: { ru: "Кровь клана", en: "Clan Blood" }, desc: { ru: "Вступи в клан", en: "Join a clan" }, reward: 100, progress: n((c) => c.clanJoined, 1) },
+  { id: "talent_4", kanji: "才", cat: "path", name: { ru: "Талантливый", en: "Talented" }, desc: { ru: "Изучи 4 таланта клана", en: "Learn 4 clan talents" }, reward: 300, progress: n((c) => c.talents, 4) },
+  { id: "capstone", kanji: "極", cat: "path", name: { ru: "Наследие клана", en: "Clan Legacy" }, desc: { ru: "Открой вершину древа талантов", en: "Unlock the top of a talent tree" }, reward: 800, progress: n((c) => c.capstone, 1) },
+  { id: "armory_1", kanji: "武", cat: "path", name: { ru: "Вооружён", en: "Armed" }, desc: { ru: "Купи оружие или глаз в оружейной", en: "Buy a weapon or an eye in the armory" }, reward: 100, progress: n((c) => c.itemsOwned, 1) },
+  { id: "armory_8", kanji: "蔵", cat: "path", name: { ru: "Коллекционер", en: "Collector" }, desc: { ru: "Собери 8 предметов", en: "Own 8 items" }, reward: 1000, progress: n((c) => c.itemsOwned, 8) },
+  { id: "level_10", kanji: "段", cat: "path", name: { ru: "Путь шиноби", en: "Shinobi Path" }, desc: { ru: "Достигни 10-го уровня", en: "Reach level 10" }, reward: 500, progress: n((c) => c.level, 10) },
+  { id: "team_5", kanji: "絆", cat: "path", name: { ru: "Узы", en: "Bonds" }, desc: { ru: "5 командных техник в вечеринке", en: "5 team techniques in party mode" }, reward: 400, progress: n((c) => c.teamCombos, 5) },
+  { id: "party_3", kanji: "宴", cat: "path", name: { ru: "Душа компании", en: "Life of the Party" }, desc: { ru: "Сыграй 3 вечеринки", en: "Play 3 party games" }, reward: 200, progress: n((c) => c.partyGames, 3) },
+  { id: "genjutsu", kanji: "解", cat: "path", name: { ru: "Кай!", en: "Kai!" }, desc: { ru: "Разрушь гендзюцу Итачи — сложи обратные печати", en: "Break Itachi's genjutsu — make the reversed seals" }, reward: 300, progress: n((c) => c.genjutsuBroken, 1) },
+  { id: "mechanics", kanji: "攻", cat: "path", name: { ru: "Разгадавший", en: "Puzzle Solver" }, desc: { ru: "Победи Итачи, Какузу, Кагую, Пейна, Мадару и Орочимару", en: "Defeat Itachi, Kakuzu, Kaguya, Pain, Madara and Orochimaru" }, reward: 1000, progress: has(["itachi", "kakuzu", "kaguya", "pain", "madara", "orochimaru"]) },
   { id: "uzumaki", kanji: "渦", cat: "world", name: { ru: "Бесконечная чакра", en: "Endless Chakra" }, desc: { ru: "Победи за Аделю Узумаки", en: "Win as Adelya Uzumaki" }, reward: 100, progress: (c) => [c.winsWith.includes("adelya") ? 1 : 0, 1] },
 ];
 
@@ -134,4 +162,5 @@ export const ACH_CATS: { id: AchCategory; name: L }[] = [
   { id: "story", name: { ru: "История", en: "Story" } },
   { id: "survival", name: { ru: "Выживание", en: "Survival" } },
   { id: "world", name: { ru: "Мир шиноби", en: "Shinobi World" } },
+  { id: "path", name: { ru: "Путь и кланы", en: "Path & Clans" } },
 ];

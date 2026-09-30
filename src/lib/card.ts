@@ -16,6 +16,10 @@ export interface CardData {
   rank: string | null; // S A B C
   stats: [string, string][];
   nick: string;
+  /** Pass title under the nickname. */
+  title?: string | null;
+  /** Pass frame around the card. */
+  frame?: { colors: [string, string]; kanji: string } | null;
   mySealLabel: string;
   win: boolean;
 }
@@ -127,6 +131,11 @@ export async function drawBattleCard(d: CardData): Promise<Blob | null> {
   ctx.fillStyle = "rgba(255,255,255,0.6)";
   ctx.font = `600 28px ${ui}`;
   ctx.fillText(d.nick, W - 60, 470);
+  if (d.title) {
+    ctx.fillStyle = accent;
+    ctx.font = `800 24px ${ui}`;
+    ctx.fillText(`「${d.title}」`, W - 60, 504);
+  }
 
   // Rank seal.
   if (d.rank) {
@@ -192,6 +201,36 @@ export async function drawBattleCard(d: CardData): Promise<Blob | null> {
   ctx.fillStyle = "rgba(255,255,255,0.45)";
   ctx.font = `700 24px ${ui}`;
   ctx.fillText("shinobi-jutsu.vercel.app", W / 2, H - 22);
+
+  // Season-pass frame around the whole card.
+  if (d.frame) {
+    const [a, b] = d.frame.colors;
+    const fg = ctx.createLinearGradient(0, 0, W, H);
+    fg.addColorStop(0, a);
+    fg.addColorStop(0.5, b);
+    fg.addColorStop(1, a);
+    ctx.save();
+    ctx.lineWidth = 22;
+    ctx.strokeStyle = fg;
+    ctx.strokeRect(11, 11, W - 22, H - 22);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(255,255,255,0.55)";
+    ctx.strokeRect(30, 30, W - 60, H - 60);
+    for (const [x, y] of [[40, 40], [W - 40, 40], [40, H - 40], [W - 40, H - 40]] as const) {
+      ctx.fillStyle = b;
+      ctx.beginPath();
+      ctx.arc(x, y, 30, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = a;
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      ctx.fillStyle = "#fff";
+      ctx.textAlign = "center";
+      ctx.font = `900 30px ${kanji}`;
+      ctx.fillText(d.frame.kanji, x, y + 11);
+    }
+    ctx.restore();
+  }
 
   return new Promise((resolve) => c.toBlob((b) => resolve(b), "image/png"));
 }

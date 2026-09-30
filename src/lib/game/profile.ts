@@ -4,6 +4,9 @@
  */
 import type { L } from "@/types/i18n";
 import type { GameMode, Rank } from "@/types/game";
+import { cleanTalents, isClanId, type ClanId } from "./clans";
+import { ITEMS, isItemId, type ItemId } from "./items";
+import { isFrameId, isTitleId, levelFor, unlockedCosmetics, type FrameId, type TitleId } from "./pass";
 
 export type UpgradeId = "chakra" | "power" | "speed" | "focus" | "guard";
 
@@ -38,12 +41,41 @@ export interface Profile {
   duelsWon: number;
   /** The one-time starter purse has been paid. */
   starter: boolean;
+  /** Clan and learned talents. */
+  clan: ClanId | null;
+  talents: string[];
+  /** Armory: owned items and what is equipped. */
+  owned: ItemId[];
+  eye: ItemId | null;
+  weapon: ItemId | null;
+  /** Shinobi Path (season pass). */
+  xp: number;
+  /** Highest level whose reward has been paid. */
+  passPaid: number;
+  title: TitleId | null;
+  frame: FrameId | null;
 }
 
 /** Every player starts with this much ryō. */
 export const STARTER_RYO = 3000;
 
-export const defaultProfile = (): Profile => ({ nick: "", ryo: 0, upgrades: noUpgrades(), wins: 0, duelsWon: 0, starter: false });
+export const defaultProfile = (): Profile => ({
+  nick: "",
+  ryo: 0,
+  upgrades: noUpgrades(),
+  wins: 0,
+  duelsWon: 0,
+  starter: false,
+  clan: null,
+  talents: [],
+  owned: [],
+  eye: null,
+  weapon: null,
+  xp: 0,
+  passPaid: 1,
+  title: null,
+  frame: null,
+});
 
 export const MAX_NICK = 16;
 
@@ -77,6 +109,16 @@ export function sanitizeProfile(raw: unknown): Profile {
     const v = u[def.id];
     p.upgrades[def.id] = typeof v === "number" ? Math.max(0, Math.min(def.max, Math.floor(v))) : 0;
   }
+  p.clan = isClanId(r.clan) ? r.clan : null;
+  p.talents = cleanTalents(p.clan, Array.isArray(r.talents) ? r.talents.filter((x): x is string => typeof x === "string") : []);
+  p.owned = Array.isArray(r.owned) ? Array.from(new Set(r.owned.filter(isItemId))) : [];
+  p.eye = isItemId(r.eye) && p.owned.includes(r.eye) && ITEMS[r.eye].slot === "eye" ? r.eye : null;
+  p.weapon = isItemId(r.weapon) && p.owned.includes(r.weapon) && ITEMS[r.weapon].slot === "weapon" ? r.weapon : null;
+  p.xp = typeof r.xp === "number" && Number.isFinite(r.xp) ? Math.max(0, Math.floor(r.xp)) : 0;
+  p.passPaid = typeof r.passPaid === "number" ? Math.max(1, Math.min(levelFor(p.xp), Math.floor(r.passPaid))) : 1;
+  const cos = unlockedCosmetics(p.passPaid);
+  p.title = isTitleId(r.title) && cos.titles.includes(r.title) ? r.title : null;
+  p.frame = isFrameId(r.frame) && cos.frames.includes(r.frame) ? r.frame : null;
   return p;
 }
 
@@ -95,6 +137,8 @@ export function buy(p: Profile, id: UpgradeId): Profile | null {
 
 /** Ryō earned for a finished fight. */
 export function reward(o: { win: boolean; rank: Rank; mode: GameMode; chapter: number | null; perfect: number }): number {
+  if (o.mode === "party") return 60;
+  if (o.mode === "lab") return 0;
   if (!o.win) return 25;
   const byRank: Record<Rank, number> = { S: 300, A: 200, B: 130, C: 80 };
   const chapterBonus = o.mode === "story" && o.chapter != null ? o.chapter * 20 : 0;

@@ -23,7 +23,7 @@ export function CharacterSelect() {
       session.dispatch({ type: "SELECT_CHARACTER", id, bossId: d.foe === id ? randomBossFor(id) : d.foe, mutators: d.mutators });
       return;
     }
-    session.dispatch({ type: "SELECT_CHARACTER", id, bossId: g.mode === "quick" || g.mode === "survival" ? randomBossFor(id) : undefined });
+    session.dispatch({ type: "SELECT_CHARACTER", id, bossId: g.mode === "quick" || g.mode === "survival" || g.party?.variant === "coop" ? randomBossFor(id) : undefined });
   };
 
   const half = Math.ceil(PLAYABLE.length / 2);
@@ -45,10 +45,22 @@ export function CharacterSelect() {
 
   return (
     <div className="select-overlay char-overlay char-wall-overlay">
-      <div className="select-title">
-        <span>{t("step1Label")}</span>
-        {t("chooseShinobi")}
-      </div>
+      {g.party ? (
+        <div className={`select-title party-pick p${g.party.heroes.length + 1}`}>
+          <span>{g.party.variant === "versus" ? t("partyVersus") : t("partyCoop")}</span>
+          {t("playerPicks", { n: g.party.heroes.length + 1 })}
+          {g.party.heroes[0] && (
+            <em className="pp-first">
+              <Portrait ch={CHARACTERS[g.party.heroes[0]]} className="pp-img" /> {t("playerN", { n: 1 })}: {tr(CHARACTERS[g.party.heroes[0]].name)}
+            </em>
+          )}
+        </div>
+      ) : (
+        <div className="select-title">
+          <span>{t("step1Label")}</span>
+          {t("chooseShinobi")}
+        </div>
+      )}
       {/* Fighting-game select: roster on both sides, the chosen fighter in the middle — everyone on one screen. */}
       <div className="char-wall">
         <div className="char-grid char-side left">{PLAYABLE.slice(0, half).map(card)}</div>
