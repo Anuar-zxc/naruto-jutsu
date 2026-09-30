@@ -170,7 +170,7 @@ export function Announcer() {
     if ((g.phase === "FAILED" && p.phase !== "FAILED") || (g.lastEnemyHit && g.lastEnemyHit.id !== p.lastEnemyHit?.id)) streak.current = 0;
     if (!finishCalled.current && g.bossHp > 0 && g.bossHp <= g.bossMaxHp * 0.25 && p.bossHp > p.bossMaxHp * 0.25 && g.mode !== "training") {
       finishCalled.current = true;
-      say(t("annFinish"), "finish", 1500, 1500, "finish");
+      say(t("annFinish"), "finish", 1300, 900, "finish");
     }
     if (g.phase === "VICTORY" && p.phase !== "VICTORY") {
       say(t("annKo"), "ko", 1000, 500, "ko");

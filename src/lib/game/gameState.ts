@@ -23,7 +23,10 @@ import { focusMult, hpMult, noUpgrades, powerMult, speedBonusMs, startShields } 
 export const DUEL_HP = 1000;
 const DUEL_FIGHT: Phase[] = ["JUTSU_SELECTION", "COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED"];
 
-export const PLAYER_MAX_HP = 100;
+/** Player chakra — the same 1000 scale as enemies, so both health bars read alike. */
+export const PLAYER_MAX_HP = 1000;
+/** Everything that touches the player's chakra (mistakes, strikes, heals) is ×10 the original 100-point tuning. */
+const CHAKRA_SCALE = 10;
 /** A wrong seal costs chakra AND time. */
 export const MISTAKE_TIME_MS = 1500;
 /** Below this share of HP the enemy enrages: hits harder, timers shrink. */
@@ -162,12 +165,13 @@ export function mistakeCost(s: GameState): number {
   let base = 9;
   if (s.mode === "survival" && s.survival) base = Math.min(16, 7 + Math.floor(s.survival.wave / 2));
   if (s.mode === "story" && s.chapter != null) base = 6 + Math.round((s.chapter / Math.max(1, CHAPTERS.length - 1)) * 6);
+  base *= CHAKRA_SCALE;
   if (s.mode === "duel") base = 60;
   return Math.max(1, Math.round(base * focusMult(s.upgrades)));
 }
 
 /** Chakra numbers (heal, recoil) scale with the mode: duels run on 1000 chakra. */
-const hpScale = (s: GameState) => (s.mode === "duel" ? 10 : 1);
+const hpScale = (_s: GameState) => CHAKRA_SCALE;
 
 /** How many jutsu the player picks for this fight. */
 export const loadoutSize = (s: GameState) => Math.min(LOADOUT_SIZE, availableJutsu(s).length);
@@ -211,7 +215,7 @@ export function enemyAttack(s: GameState): number {
     const w = s.survival.wave;
     base = Math.min(72, 24 + Math.round(w * 2.5)) * (isBossWave(w) ? 1.2 : 1);
   }
-  return Math.round(base * (enraged(s) ? RAGE_MULT : 1));
+  return Math.round(base * CHAKRA_SCALE * (enraged(s) ? RAGE_MULT : 1));
 }
 
 function startFight(s: GameState): GameState {

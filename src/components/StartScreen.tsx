@@ -40,7 +40,7 @@ export function StartScreen({ onStart }: { onStart: () => void }) {
     return () => window.removeEventListener("pointermove", onMove);
   }, []);
 
-  const trio = (["sasuke", "naruto", "kakashi"] as const).map((id) => CHARACTERS[id]);
+  const trio = (["sasuke", "naruto-six-paths", "kakashi"] as const).map((id) => CHARACTERS[id]);
   const stats: [string, StrKey][] = [
     ["24", "statSeals"],
     ["12", "statJutsu"],

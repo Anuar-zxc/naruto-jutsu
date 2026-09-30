@@ -294,7 +294,8 @@ export const CHARACTERS: Record<CharacterId, Character> = {
 
 /** Display order on the select screen: heroes first, then rogues. */
 const ORDER: CharacterId[] = [
-  "naruto", "naruto-six-paths", "sasuke", "sakura", "kakashi", "minato", "jiraiya", "hashirama",
+  // Base Naruto is hidden from the roster (his artwork was replaced by the Six Paths form).
+  "naruto-six-paths", "sasuke", "sakura", "kakashi", "minato", "jiraiya", "hashirama",
   "shikamaru", "shisui", "boruto", "boruto-karma", "mitsuki",
   "rock-lee", "might-guy", "neji", "hinata", "gaara", "temari", "kankuro", "tsunade", "hiruzen", "tobirama", "asuma", "kurenai", "yamato", "sai", "kiba", "shino", "choji", "ino", "tenten", "iruka", "konohamaru", "sarada", "kushina", "killer-bee", "raikage", "mei", "onoki",
   "itachi", "kisame", "hidan", "konan", "pain", "kawaki", "obito", "obito-six-paths", "madara", "momoshiki", "isshiki",

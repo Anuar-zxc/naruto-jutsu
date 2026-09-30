@@ -11,7 +11,7 @@ export function CharacterSelect() {
   useLang();
   const session = useSession();
   const g = useGame();
-  const [hover, setHover] = useState<CharacterId>("naruto");
+  const [hover, setHover] = useState<CharacterId>("naruto-six-paths");
   const h = CHARACTERS[hover];
   const foe = g.mode === "quick" || g.mode === "survival" ? CHARACTERS[bossFor(hover)] : null;
 

@@ -78,8 +78,9 @@ async function main() {
       unlocked.push(...ch.unlocks);
     }
     assert.deepEqual([...unlocked].sort(), [...JUTSU_LIST.map((j) => j.id)].sort());
-    assert.equal(CHARACTER_LIST.length, 63);
-    assert.equal(new Set(CHARACTER_LIST.map((c) => c.id)).size, 63, "no duplicate ids");
+    assert.equal(CHARACTER_LIST.length, 62);
+    assert.equal(new Set(CHARACTER_LIST.map((c) => c.id)).size, 62, "no duplicate ids");
+    assert.ok(!CHARACTER_LIST.some((c) => c.id === "naruto"), "base Naruto is off the roster");
     for (const c of CHARACTER_LIST) assert.ok(existsSync(`public${c.image}`), `artwork for ${c.id}`);
   });
 
@@ -155,9 +156,9 @@ async function main() {
     assert.equal(s.bossHp, afterCast - 70);
     // Water dragon heals.
     s = withLoadout(["SUIRYUDAN", "CHIDORI", "RASENGAN"]);
-    s = { ...s, playerHp: 50 };
+    s = { ...s, playerHp: 500 };
     s = cast(s, "SUIRYUDAN");
-    assert.equal(s.playerHp, 80);
+    assert.equal(s.playerHp, 800);
     // Kirin: ×2.2 when the enemy is below 40%.
     s = withLoadout(["KIRIN", "CHIDORI", "RASENGAN"]);
     s = cast({ ...s, bossHp: 300 }, "KIRIN");
@@ -363,7 +364,7 @@ async function main() {
     const up = { ...noUpgrades(), chakra: 2, power: 3, speed: 2, focus: 2, guard: 1 };
     const base = quick();
     const s0 = reduce(menu(), { type: "SET_UPGRADES", upgrades: up }, { type: "SELECT_MODE", mode: "quick" }, { type: "SELECT_CHARACTER", id: "hashirama", bossId: "pain" });
-    assert.equal(s0.playerMaxHp, 120);
+    assert.equal(s0.playerMaxHp, 1200);
     assert.equal(s0.status.shield, 1, "guard: starts with a shield");
     assert.equal(timeLimit(s0, 10000), timeLimit(base, 10000) + 2000);
     let a = cast(base, "RASENGAN");

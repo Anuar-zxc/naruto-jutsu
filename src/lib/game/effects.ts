@@ -12,7 +12,7 @@ export function effectText(j: Jutsu): string {
     case "burn":
       return t("effBurn", { d: e.dmg, t: e.turns });
     case "heal":
-      return t("effHeal", { n: e.hp });
+      return t("effHeal", { n: e.hp * 10 });
     case "pierce":
       return t("effPierce", { n: e.perfectMult });
     case "combo":
@@ -22,7 +22,7 @@ export function effectText(j: Jutsu): string {
     case "execute":
       return t("effExecute", { n: e.mult, p: Math.round(e.belowPct * 100) });
     case "recoil":
-      return t("effRecoil", { n: e.hp });
+      return t("effRecoil", { n: e.hp * 10 });
     default:
       return t("effNone");
   }

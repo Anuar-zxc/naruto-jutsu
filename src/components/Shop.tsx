@@ -1,90 +1,194 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "@/hooks/useGame";
 import { useProfile } from "@/hooks/useProfile";
 import { useLang } from "@/hooks/useLang";
-import { MAX_NICK, UPGRADES, nextCost } from "@/lib/game/profile";
+import { MAX_NICK, UPGRADES, nextCost, type UpgradeId } from "@/lib/game/profile";
+import { CHARACTERS } from "@/lib/game/characters";
 import { t, tr } from "@/lib/i18n";
+import { Portrait } from "./Portrait";
 
-/** Profile + upgrade shop: nickname, ryō balance, five upgrades. */
+/** What an upgrade gives at a given level, as a short number. */
+function effectAt(id: UpgradeId, lvl: number): string {
+  switch (id) {
+    case "chakra":
+      return `+${lvl * 10}%`;
+    case "power":
+      return `+${lvl * 8}%`;
+    case "speed":
+      return `+${lvl} ${t("sec")}`;
+    case "focus":
+      return `−${lvl * 15}%`;
+    case "guard":
+      return `${lvl} 🛡`;
+  }
+}
+
+/** Ryō counter that rolls to its new value. */
+function useRolling(value: number) {
+  const [shown, setShown] = useState(value);
+  const from = useRef(value);
+  useEffect(() => {
+    const start = performance.now();
+    const a = from.current;
+    let raf = 0;
+    const step = (now: number) => {
+      const k = Math.min(1, (now - start) / 600);
+      const v = Math.round(a + (value - a) * (1 - Math.pow(1 - k, 3)));
+      setShown(v);
+      if (k < 1) raf = requestAnimationFrame(step);
+      else from.current = value;
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+  return shown;
+}
+
+/**
+ * The shop, as a place: a lantern-lit street, the Toad Sage behind the counter
+ * talking to you, and the upgrades as scrolls with a red hanko seal, a level
+ * track and a price tag. Your ninja card (nickname, record) sits at the bottom.
+ */
 export function Shop() {
   useLang();
   const session = useSession();
   const p = useProfile();
   const [nick, setNick] = useState(p.nick);
   const [flash, setFlash] = useState<string | null>(null);
+  const [line, setLine] = useState<{ text: string; key: number }>({ text: t("keeperHello"), key: 0 });
+  const ryo = useRolling(p.ryo);
+  const keeper = CHARACTERS.jiraiya;
+  const say = (text: string) => setLine({ text, key: Date.now() });
+
+  const buy = (id: UpgradeId) => {
+    const cost = nextCost(p, id);
+    if (cost == null) return say(t("keeperMaxed"));
+    if (p.ryo < cost) {
+      session.sfx.error();
+      return say(t("keeperPoor", { n: cost - p.ryo }));
+    }
+    if (session.buyUpgrade(id)) {
+      session.sfx.mastered();
+      setFlash(id);
+      setTimeout(() => setFlash(null), 900);
+      const u = UPGRADES.find((x) => x.id === id)!;
+      say(t("keeperBought", { name: tr(u.name) }));
+    }
+  };
 
   return (
-    <div className="select-overlay shop">
-      <div className="select-title">
-        <span>店</span>
-        {t("shopHeader")}
-      </div>
+    <div className="select-overlay shop2">
+      <div className="shop2-bg" aria-hidden />
 
-      <div className="shop-top">
-        <form
-          className="nick-form"
-          onSubmit={(e: { preventDefault(): void }) => {
-            e.preventDefault();
-            session.setNick(nick);
-            session.sfx.select();
-          }}
-        >
-          <label>{t("nickLabel")}</label>
-          <input value={nick} onChange={(e: { target: { value: string } }) => setNick(e.target.value)} maxLength={MAX_NICK} data-input="nick" />
-          <button className="btn small" type="submit" disabled={!nick.trim() || nick.trim() === p.nick}>
-            {t("nickSave")}
-          </button>
-        </form>
-        <div className="purse" data-ryo={p.ryo}>
-          <span className="purse-coin">両</span>
-          <b>{p.ryo.toLocaleString("en-US")}</b> {t("ryo")}
-          <em>{t("statsLine", { w: p.wins, d: p.duelsWon })}</em>
-        </div>
-      </div>
+      <div className="shop2-layout">
+        <aside className="shop2-keeper">
+          <div className="sk-bubble" key={line.key}>
+            {line.text}
+          </div>
+          <Portrait ch={keeper} className="sk-img" />
+          <div className="sk-name">
+            {tr(keeper.name)} · <span>{t("keeperTitle")}</span>
+          </div>
+        </aside>
 
-      <div className="shop-grid">
-        {UPGRADES.map((u) => {
-          const lvl = p.upgrades[u.id];
-          const cost = nextCost(p, u.id);
-          const afford = cost != null && p.ryo >= cost;
-          return (
-            <div key={u.id} className={`shop-card ${lvl >= u.max ? "maxed" : ""}`} data-upgrade={u.id}>
-              <div className="shop-kanji">{u.kanji}</div>
-              <div className="shop-name">{tr(u.name)}</div>
-              <div className="shop-per">{tr(u.per)}</div>
-              <div className="shop-pips">
-                {Array.from({ length: u.max }, (_, i) => (
-                  <i key={i} className={i < lvl ? "on" : ""} />
-                ))}
-                <span>{t("level", { n: lvl, m: u.max })}</span>
+        <main className="shop2-main">
+          <header className="shop2-head">
+            <div className="shop2-title">
+              <span className="shop2-kanji">店</span>
+              <div>
+                <b>{t("shopHeader")}</b>
+                <em>{t("shopSub")}</em>
               </div>
-              <button
-                className={`btn small ${afford ? "primary" : "ghost"}`}
-                disabled={cost == null || !afford}
-                onClick={() => {
-                  if (session.buyUpgrade(u.id)) {
-                    session.sfx.mastered();
-                    setFlash(u.id);
-                    setTimeout(() => setFlash(null), 700);
-                  }
-                }}
-                data-action={`buy-${u.id}`}
-              >
-                {cost == null ? t("maxed") : afford ? t("buyFor", { n: cost }) : `${t("notEnough")} · ${cost}`}
-              </button>
-              {flash === u.id && <div className="shop-flash">+1</div>}
             </div>
-          );
-        })}
-      </div>
+            <div className="shop2-purse" data-ryo={p.ryo}>
+              <span className="purse-coin big">両</span>
+              <b>{ryo.toLocaleString("en-US")}</b>
+              <span>{t("ryo")}</span>
+            </div>
+          </header>
 
-      <p className="select-tip">{t("shopHint")}</p>
-      <div className="chapter-actions">
-        <button className="btn ghost small" onClick={() => session.dispatch({ type: "CLOSE_SHOP" })} data-action="close-shop">
-          {t("back")}
-        </button>
+          <div className="shop2-list">
+            {UPGRADES.map((u, i) => {
+              const lvl = p.upgrades[u.id];
+              const cost = nextCost(p, u.id);
+              const maxed = cost == null;
+              const afford = !maxed && p.ryo >= cost;
+              return (
+                <div
+                  key={u.id}
+                  className={`scroll-item ${maxed ? "maxed" : ""} ${afford ? "afford" : ""} ${flash === u.id ? "bought" : ""}`}
+                  style={{ animationDelay: `${i * 0.06}s` }}
+                  data-upgrade={u.id}
+                >
+                  <div className="si-seal">
+                    <span>{u.kanji}</span>
+                  </div>
+                  <div className="si-body">
+                    <div className="si-name">{tr(u.name)}</div>
+                    <div className="si-per">{tr(u.per)}</div>
+                    <div className="si-track">
+                      {Array.from({ length: u.max }, (_, k) => (
+                        <i key={k} className={k < lvl ? "on" : k === lvl && !maxed ? "next" : ""} />
+                      ))}
+                      <span className="si-now">
+                        {effectAt(u.id, lvl)}
+                        {!maxed && <em> → {effectAt(u.id, lvl + 1)}</em>}
+                      </span>
+                    </div>
+                  </div>
+                  <button className="si-buy" disabled={maxed} onClick={() => buy(u.id)} data-action={`buy-${u.id}`} aria-label={maxed ? t("maxed") : t("buyFor", { n: cost })}>
+                    {maxed ? (
+                      <b className="si-max">{t("maxed")}</b>
+                    ) : (
+                      <>
+                        <span className="si-price">
+                          <span className="purse-coin">両</span>
+                          {cost.toLocaleString("en-US")}
+                        </span>
+                        <em>{afford ? t("buyShort") : t("notEnough")}</em>
+                      </>
+                    )}
+                  </button>
+                  {flash === u.id && (
+                    <div className="si-burst" aria-hidden>
+                      <span>+1</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <footer className="shop2-foot">
+            <form
+              className="ninja-card"
+              onSubmit={(e: { preventDefault(): void }) => {
+                e.preventDefault();
+                session.setNick(nick);
+                session.sfx.select();
+                say(t("keeperNick", { nick: nick.trim() }));
+              }}
+            >
+              <div className="nc-stamp">忍</div>
+              <div className="nc-fields">
+                <label>{t("nickLabel")}</label>
+                <div className="nc-row">
+                  <input value={nick} onChange={(e: { target: { value: string } }) => setNick(e.target.value)} maxLength={MAX_NICK} data-input="nick" />
+                  <button className="btn small" type="submit" disabled={!nick.trim() || nick.trim() === p.nick}>
+                    {t("nickSave")}
+                  </button>
+                </div>
+                <div className="nc-stats">{t("statsLine", { w: p.wins, d: p.duelsWon })}</div>
+              </div>
+            </form>
+            <p className="shop2-hint">{t("shopHint")}</p>
+            <button className="btn ghost small" onClick={() => session.dispatch({ type: "CLOSE_SHOP" })} data-action="close-shop">
+              {t("back")}
+            </button>
+          </footer>
+        </main>
       </div>
     </div>
   );
