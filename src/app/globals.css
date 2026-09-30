@@ -6393,21 +6393,21 @@ html.lowfx .mm-bg-img {
 
 /* --- main menu: 12 entries ---------------------------------------------- */
 .mm-list.dense {
-  gap: clamp(0px, 0.35vh, 5px);
+  gap: clamp(2px, 0.55vh, 8px);
 }
 .mm-list.dense .mm-item {
-  grid-template-columns: clamp(46px, 6vh, 70px) 1fr auto;
-  padding-top: clamp(2px, 0.45vh, 7px);
-  padding-bottom: clamp(2px, 0.45vh, 7px);
+  grid-template-columns: clamp(56px, 8.6vh, 100px) 1fr auto;
+  padding-top: clamp(4px, 0.75vh, 11px);
+  padding-bottom: clamp(4px, 0.75vh, 11px);
 }
 .mm-list.dense .mm-kanji {
-  font-size: clamp(20px, 3vh, 36px);
+  font-size: clamp(24px, 3.9vh, 46px);
 }
 .mm-list.dense .mm-text b {
-  font-size: clamp(17px, 2.35vh, 28px);
+  font-size: clamp(20px, 3.15vh, 38px);
 }
 .mm-list.dense .mm-text em {
-  font-size: 12px;
+  font-size: 13px;
   max-height: 0;
   overflow: hidden;
   transition: max-height 0.25s;
@@ -7954,4 +7954,44 @@ html.lowfx .mm-bg-img {
 }
 .lb-screen .ach-head {
   width: min(760px, 100%);
+}
+.mm-kanji {
+  white-space: nowrap;
+}
+/* clan cards: show the fighter's face and chest, not their legs */
+.clan-layout {
+  grid-template-columns: minmax(300px, 420px) 1fr;
+}
+.clan-card {
+  height: clamp(140px, 20vh, 190px);
+}
+.clan-card .clc-img {
+  left: auto;
+  right: -4%;
+  top: 4%;
+  bottom: auto;
+  height: 230%;
+  width: auto;
+  max-width: none;
+  opacity: 1;
+  object-fit: contain;
+  object-position: top;
+  filter: drop-shadow(0 0 12px rgba(0, 0, 0, 0.9));
+  transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.clan-card:hover .clc-img,
+.clan-card.on .clc-img {
+  transform: scale(1.06) translateY(-2%);
+}
+.clan-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(8, 5, 12, 0.85) 0%, rgba(8, 5, 12, 0.25) 45%, transparent 65%), linear-gradient(0deg, rgba(8, 5, 12, 0.8) 0%, transparent 40%);
+  pointer-events: none;
+}
+.clan-card .clc-kanji,
+.clan-card b,
+.clan-card em {
+  z-index: 1;
 }
