@@ -39,12 +39,12 @@ import { Lobby } from "./Lobby";
 import { Shop } from "./Shop";
 import { LoadoutTray } from "./LoadoutTray";
 import { tagText } from "@/lib/game/effects";
-import { enraged } from "@/lib/game/gameState";
+import { enraged, isBossWave } from "@/lib/game/gameState";
 import { askSensei, tauntRequest } from "@/lib/ai/sensei";
 
 const LS_MUTE = "shinobi.muted";
 /** Phases shown on the fighting-game stage. */
-const FIGHT_PHASES = ["JUTSU_SELECTION", "COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED", "VICTORY", "DEFEAT"];
+const FIGHT_PHASES = ["JUTSU_SELECTION", "COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED", "WAVE_CLEAR", "VICTORY", "DEFEAT"];
 // v2: music defaults back ON after the soundtrack update, even if it was switched off before.
 const LS_MUSIC = "shinobi.music.v2";
 
@@ -281,7 +281,7 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
     }
 
     // VS splash when the fight begins.
-    if (g.phase === "COUNTDOWN" && p.phase === "JUTSU_SELECTION" && g.round === 1) {
+    if (g.phase === "COUNTDOWN" && (p.phase === "JUTSU_SELECTION" || p.phase === "WAVE_CLEAR") && g.round === 1) {
       setVs(Date.now());
       setTimeout(() => setVs(null), 1900);
     }
@@ -334,6 +334,13 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
       setTimeout(() => setShowResult(true), 2300);
     }
     if (g.phase === "DEFEAT") setTimeout(() => setShowResult(true), 1500);
+    if (g.phase === "WAVE_CLEAR") {
+      const c = center(bossRef.current, 0.45);
+      setTimeout(() => {
+        fx.current?.burst(c.x, c.y, { colors: ["#ffd166", "#ff7a1a", "#ffffff"], count: 160, speed: 14, size: 6, life: 70 });
+        fx.current?.ring(c.x, c.y, "#ffd166", { speed: 16, width: 8, life: 36 });
+      }, 400);
+    }
     if (["JUTSU_SELECTION", "IDLE", "DIALOGUE", "CHAPTER_SELECT", "MODE_SELECT", "TRAINING", "COUNTDOWN"].includes(g.phase)) {
       if (g.phase !== "COUNTDOWN") setReply(null);
       setShowResult(false);
@@ -465,6 +472,21 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
           )}
           {g.phase === "JUTSU_CAST" && g.lastCast?.perfect && <div className="cb-perfect">{t("perfectJutsu", { n: g.lastCast.perfectBonus })}</div>}
           {g.phase === "JUTSU_CAST" && g.lastCast && g.lastCast.speedBonus > 0 && <div className="cb-bonus">{t("speedBonus", { n: g.lastCast.speedBonus })}</div>}
+        </div>
+      )}
+      {g.phase === "WAVE_CLEAR" && g.survival && (
+        <div className="wave-banner" key={`w${g.survival.wave}`}>
+          <div className="wb-title">{t("waveClear", { n: g.survival.wave })}</div>
+          <div className="wb-reward">
+            <span className="purse-coin">両</span> {t("waveReward", { n: g.survival.lastReward })}
+          </div>
+          <div className="wb-extra">
+            {g.survival.healed > 0 && <span className="rr-good">{t("waveHeal", { n: g.survival.healed })}</span>}
+            {isBossWave(g.survival.wave) && <span className="rr-good">{t("waveShield")}</span>}
+            <span className="wb-total">
+              Σ 両 {g.survival.earned.toLocaleString("en-US")}
+            </span>
+          </div>
         </div>
       )}
       {g.phase === "NEXT_ROUND" && (

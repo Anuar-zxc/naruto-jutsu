@@ -13,12 +13,12 @@ export function CharacterSelect() {
   const g = useGame();
   const [hover, setHover] = useState<CharacterId>("naruto");
   const h = CHARACTERS[hover];
-  const foe = g.mode === "quick" ? CHARACTERS[bossFor(hover)] : null;
+  const foe = g.mode === "quick" || g.mode === "survival" ? CHARACTERS[bossFor(hover)] : null;
 
   const choose = (id: CharacterId) => {
     session.sfx.unlock();
     session.sfx.select();
-    session.dispatch({ type: "SELECT_CHARACTER", id, bossId: g.mode === "quick" ? randomBossFor(id) : undefined });
+    session.dispatch({ type: "SELECT_CHARACTER", id, bossId: g.mode === "quick" || g.mode === "survival" ? randomBossFor(id) : undefined });
   };
 
   const half = Math.ceil(PLAYABLE.length / 2);

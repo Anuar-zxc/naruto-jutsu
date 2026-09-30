@@ -24,7 +24,7 @@ import { CHAPTERS } from "./story";
 import { DOJO_REWARD, withStarter, buy, defaultProfile, randomNick, reward, sanitizeProfile, cleanNick, type Profile, type UpgradeId } from "./profile";
 import { hostLocal, hostPeer, joinLocal, joinPeer, newRoomCode, normalizeCode, type NetError, type NetMessage, type Transport } from "@/lib/net/transport";
 import type { CharacterId } from "./characters";
-import { CHARACTERS } from "./characters";
+import { CHARACTERS, survivalBossFor } from "./characters";
 
 const LS_PROFILE = "shinobi.profile";
 
@@ -44,6 +44,7 @@ const IDLE_DUEL: DuelUi = { status: "idle", code: "", error: null, opponent: nul
 // v2: the 27-chapter story. Old 13-chapter progress is carried over proportionally.
 const LS_PROGRESS = "shinobi.progress.v2";
 const LS_PROGRESS_V1 = "shinobi.progress";
+const LS_SURVIVAL = "shinobi.survival.best";
 const V1_CHAPTERS = 13;
 const LS_RECORDS = "shinobi.records";
 const LS_DOJO = "shinobi.dojo";
@@ -95,6 +96,8 @@ export const TIMING = {
   castImpact: 650,
   castDuration: 2600,
   nextRound: 2300,
+  /** Survival: pause between waves (banner + reward). */
+  waveBreak: 3400,
   /** Extra time a wrong seal must be held (after recognition) before it counts as a mistake. */
   wrongHold: 350,
   /** How long a counted mistake stays on screen. */
@@ -210,6 +213,34 @@ export class GameSession {
       }
     }
     return { key, best: prev, isNew };
+  }
+
+  // --- survival best run, persisted per browser ---------------------------------
+  private survivalBest: { wave: number; earned: number } = { wave: 0, earned: 0 };
+  /** Result of the survival run that just ended (for the result panel). */
+  lastSurvival: { waves: number; earned: number; isNew: boolean } | null = null;
+  getSurvivalBest = () => this.survivalBest;
+  loadSurvivalBest() {
+    try {
+      const v = JSON.parse(localStorage.getItem(LS_SURVIVAL) ?? "null");
+      if (v && typeof v.wave === "number") this.survivalBest = { wave: Math.max(0, Math.floor(v.wave)), earned: Math.max(0, Math.floor(v.earned ?? 0)) };
+    } catch {
+      /* ignore */
+    }
+  }
+  private commitSurvival(s: GameState) {
+    const waves = Math.max(0, (s.survival?.wave ?? 1) - 1);
+    const earned = s.survival?.earned ?? 0;
+    const isNew = waves > this.survivalBest.wave;
+    if (isNew) {
+      this.survivalBest = { wave: waves, earned };
+      try {
+        localStorage.setItem(LS_SURVIVAL, JSON.stringify(this.survivalBest));
+      } catch {
+        /* storage unavailable */
+      }
+    }
+    this.lastSurvival = { waves, earned, isNew };
   }
 
   // --- profile: nickname, ryō, upgrades ---------------------------------------
@@ -545,8 +576,22 @@ export class GameSession {
       case "DEFEAT":
         this.sfx.enemyStrike();
         this.schedule(500, () => this.sfx.defeat());
-        this.payout(false);
+        if (this.state.mode === "survival") {
+          // Wave rewards were banked as they were earned; just record the run.
+          this.commitSurvival(this.state);
+          this.lastReward = this.state.survival?.earned ?? 0;
+        } else this.payout(false);
         break;
+      case "WAVE_CLEAR": {
+        const s = this.state;
+        const r = s.survival?.lastReward ?? 0;
+        this.setProfile({ ...this.profile, ryo: this.profile.ryo + r });
+        this.sfx.announce("ko");
+        this.schedule(900, () => this.sfx.mastered());
+        const next = survivalBossFor(s.characterId ?? "naruto", (s.survival?.wave ?? 1) + 1, s.bossId);
+        this.schedule(TIMING.waveBreak, () => this.dispatch({ type: "NEXT_WAVE", bossId: next }));
+        break;
+      }
       case "TRAINING":
         this.loadDojo();
         this.recognizer?.reset();

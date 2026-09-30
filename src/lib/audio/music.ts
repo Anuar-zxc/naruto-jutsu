@@ -354,7 +354,7 @@ export function trackFor(phase: string, bossHp: number, bossMaxHp: number): Trac
   if (phase === "VICTORY") return "victory";
   if (phase === "DEFEAT") return "defeat"; // only if defeat.mp3 was added — otherwise the sting plays alone
   if (phase === "DIALOGUE" || phase === "TRAINING") return "dialogue";
-  if (["COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED", "JUTSU_SELECTION"].includes(phase)) {
+  if (["COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED", "JUTSU_SELECTION", "WAVE_CLEAR"].includes(phase)) {
     // One track for the whole fight: no switch (and restart) when the enemy is low.
     void bossHp;
     void bossMaxHp;

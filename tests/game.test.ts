@@ -5,11 +5,11 @@ import { existsSync } from "node:fs";
  * REAL recognizer.
  */
 import assert from "node:assert/strict";
-import { DUEL_HP, MISTAKE_TIME_MS, PLAYER_MAX_HP, RETALIATION, TRAIN_MASTERY, availableJutsu, dialogueLines, enemyAttack, enraged, gameReducer, initialGameState, mistakeCost, timeLimit } from "../src/lib/game/gameState";
+import { DUEL_HP, isBossWave, waveHp, waveReward, MISTAKE_TIME_MS, PLAYER_MAX_HP, RETALIATION, TRAIN_MASTERY, availableJutsu, dialogueLines, enemyAttack, enraged, gameReducer, initialGameState, mistakeCost, timeLimit } from "../src/lib/game/gameState";
 import { JUTSU, JUTSU_LIST } from "../src/lib/game/jutsu";
 import { rankFor, accuracy } from "../src/lib/game/scoring";
 import { comboMultiplier } from "../src/lib/game/combo";
-import { CHARACTERS, CHARACTER_LIST, damageMultiplier, randomBossFor } from "../src/lib/game/characters";
+import { CHARACTERS, CHARACTER_LIST, damageMultiplier, randomBossFor, survivalBossFor } from "../src/lib/game/characters";
 import { CHAPTERS, linesFor } from "../src/lib/game/story";
 import { LOCATIONS } from "../src/lib/game/locations";
 import { GameSession, TIMING } from "../src/lib/game/session";
@@ -257,6 +257,53 @@ async function main() {
     assert.ok(linesFor(CHAPTERS[6], "outro", "naruto", "kimimaro").some((l) => l.who === "gaara"));
     const kak = reduce(menu(), { type: "SELECT_MODE", mode: "story" }, { type: "SELECT_CHARACTER", id: "kakashi" }, { type: "SELECT_CHAPTER", index: 0 });
     assert.equal(kak.bossId, "jiraiya", "mentor is never the player");
+  });
+
+  await test("survival: waves never end, each pays ryō, heals a little and brings a new enemy; boss every 5th", () => {
+    let s = reduce(menu(), { type: "SELECT_MODE", mode: "survival" }, { type: "SELECT_CHARACTER", id: "naruto", bossId: "hidan" });
+    assert.equal(s.phase, "JUTSU_SELECTION");
+    assert.equal(s.survival?.wave, 1);
+    assert.equal(s.bossMaxHp, waveHp(1));
+    assert.equal(availableJutsu(s).length, 12);
+    s = reduce(s, { type: "TOGGLE_LOADOUT", id: "RASENGAN" }, { type: "TOGGLE_LOADOUT", id: "CHIDORI" }, { type: "TOGGLE_LOADOUT", id: "KIRIN" }, { type: "CONFIRM_LOADOUT" });
+    let earned = 0;
+    for (let wave = 1; wave <= 6; wave++) {
+      let guard = 0;
+      while (s.phase !== "WAVE_CLEAR" && guard++ < 40) {
+        s = reduce(cast(s, s.jutsuId!), { type: "CAST_DONE" });
+        if (s.phase === "NEXT_ROUND") s = reduce(s, { type: "NEXT_ROUND_DONE" });
+      }
+      assert.equal(s.phase, "WAVE_CLEAR", `wave ${wave} cleared`);
+      earned += waveReward(wave);
+      assert.equal(s.survival!.earned, earned);
+      assert.equal(s.survival!.lastReward, waveReward(wave));
+      const next = survivalBossFor("naruto", wave + 1, s.bossId, () => 0.5);
+      assert.notEqual(next, s.bossId, "never the same enemy twice in a row");
+      s = reduce(s, { type: "NEXT_WAVE", bossId: next });
+      assert.equal(s.phase, "COUNTDOWN", "no loadout screen between waves");
+      assert.equal(s.bossId, next);
+      assert.equal(s.bossMaxHp, waveHp(wave + 1));
+      assert.deepEqual(s.loadout, ["RASENGAN", "CHIDORI", "KIRIN"]);
+    }
+    assert.ok(isBossWave(5) && !isBossWave(4));
+    assert.equal(waveReward(5), (40 + 5 * 20) * 2, "boss wave pays double");
+    assert.ok(waveHp(5) > waveHp(6), "boss wave is tougher than the wave after it");
+    // Enemies get meaner as waves go on.
+    const at = (w: number) => enemyAttack({ ...s, survival: { ...s.survival!, wave: w }, bossHp: 1000, bossMaxHp: 1000 });
+    assert.ok(at(10) > at(1));
+    // Losing ends the run but keeps what was banked; a new run starts from wave 1.
+    let lost = s;
+    for (let i = 0; i < 30 && lost.phase !== "DEFEAT"; i++) {
+      if (lost.phase === "FAILED") lost = reduce(lost, { type: "RETRY" });
+      if (lost.phase === "COUNTDOWN") lost = reduce(lost, ...go);
+      lost = reduce(lost, { type: "TICK", dt: 60000 });
+    }
+    assert.equal(lost.phase, "DEFEAT");
+    assert.equal(lost.survival!.earned, earned);
+    const again = reduce(lost, { type: "RESTART" });
+    assert.equal(again.survival!.wave, 1);
+    assert.equal(again.survival!.earned, 0);
+    assert.equal(again.phase, "JUTSU_SELECTION");
   });
 
   await test("enemy counter-attack: each failed jutsu costs chakra, empty chakra → DEFEAT → rematch", () => {

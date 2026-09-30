@@ -7,6 +7,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { CHARACTERS } from "@/lib/game/characters";
 import type { Location } from "@/lib/game/locations";
 import { t, tr } from "@/lib/i18n";
+import { isBossWave } from "@/lib/game/gameState";
 import { ArenaBackdrop } from "./ArenaBackdrop";
 import { Portrait } from "./Portrait";
 
@@ -48,7 +49,7 @@ export const BattleStage = forwardRef<HTMLDivElement, Props>(function BattleStag
   const foeName = duel && g.duel ? g.duel.opponentNick : boss ? (shadow ? t("shadowOf", { name: tr(boss.name) }) : tr(boss.name)) : "???";
   const clock = g.phase === "PLAYING" ? Math.ceil(g.timeLeftMs / 1000) : g.phase === "COUNTDOWN" ? g.countdown : "∞";
   const urgent = g.phase === "PLAYING" && g.timeLeftMs <= 5000;
-  const victory = g.phase === "VICTORY";
+  const victory = g.phase === "VICTORY" || g.phase === "WAVE_CLEAR";
   const defeat = g.phase === "DEFEAT";
 
   return (
@@ -70,7 +71,7 @@ export const BattleStage = forwardRef<HTMLDivElement, Props>(function BattleStag
         <div className={`mk-clock ${urgent ? "urgent" : ""}`}>
           <b key={String(clock)}>{clock}</b>
           <span>
-            {t("round")} {g.round}
+            {g.mode === "survival" && g.survival ? `${t("wave")} ${g.survival.wave}` : `${t("round")} ${g.round}`}
           </span>
         </div>
         <div className="mk-side r">
@@ -98,8 +99,10 @@ export const BattleStage = forwardRef<HTMLDivElement, Props>(function BattleStag
         </div>
         <div ref={foeRef} className={`fighter f-foe ${victory ? "ko" : ""} ${shadow ? "shadow" : ""}`} style={boss ? { ["--aura" as string]: boss.color } : undefined}>
           <div className="f-shadow" />
-          <div key={hitKey} className={`f-body ${hitKey ? "hit" : ""}`}>
-            {boss && <Portrait ch={boss} className="f-img" flip key={boss.id} />}
+          <div className="f-in" key={boss?.id ?? "none"}>
+            <div key={hitKey} className={`f-body ${hitKey ? "hit" : ""}`}>
+              {boss && <Portrait ch={boss} className="f-img" flip key={boss.id} />}
+            </div>
           </div>
           {taunt && (
             <div className="taunt mk-taunt" key={taunt}>
@@ -153,7 +156,11 @@ export function Announcer() {
         streak.current = 0;
       }
       // Round 1 waits for the VS splash to clear.
-      say(`${t("round")} ${g.round}`, "round", 1100, g.round === 1 && p.phase === "JUTSU_SELECTION" ? 1350 : 0, g.round === 1 ? "round" : undefined);
+      const afterVs = g.round === 1 && (p.phase === "JUTSU_SELECTION" || p.phase === "WAVE_CLEAR");
+      const vsDelay = 1850;
+      const wave = g.mode === "survival" && g.survival && g.round === 1 ? g.survival.wave : null;
+      if (wave != null) say(isBossWave(wave) ? t("bossWave", { n: wave }) : `${t("wave")} ${wave}`, isBossWave(wave) ? "finish" : "round", 1300, afterVs ? vsDelay : 0, wave === 1 ? "round" : "fight");
+      else say(`${t("round")} ${g.round}`, "round", 1100, afterVs ? vsDelay : 0, g.round === 1 ? "round" : undefined);
     }
     if (g.phase === "PLAYING" && p.phase === "COUNTDOWN" && g.round === 1) say(t("annFight"), "fight", 900, 0, "fight");
     if (g.phase === "JUTSU_CAST" && p.phase !== "JUTSU_CAST") {
@@ -171,6 +178,7 @@ export function Announcer() {
       say(flawless ? t("annFlawless") : t("annWin"), flawless ? "flawless" : "win", 1400, 1550, flawless ? "flawless" : undefined);
     }
     if (g.phase === "DEFEAT" && p.phase !== "DEFEAT") say(t("annLose"), "lose", 1500, 250);
+    if (g.phase === "WAVE_CLEAR" && p.phase !== "WAVE_CLEAR") say(t("annKo"), "ko", 1100, 300);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [g]);
 

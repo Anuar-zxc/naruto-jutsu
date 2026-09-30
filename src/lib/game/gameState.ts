@@ -71,6 +71,7 @@ export const initialGameState = (): GameState => ({
   upgrades: noUpgrades(),
   duel: null,
   training: null,
+  survival: null,
   jutsuId: null,
   seqIndex: 0,
   timeLeftMs: 0,
@@ -84,7 +85,7 @@ export const initialGameState = (): GameState => ({
 
 const ALL_PHASES: Phase[] = [
   "CAMERA_CHECK", "READY", "MODE_SELECT", "CHARACTER_SELECT", "CHAPTER_SELECT", "DIALOGUE", "JUTSU_SELECTION",
-  "COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED", "DEFEAT", "TRAINING", "SHOP", "LOBBY", "VICTORY",
+  "COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED", "DEFEAT", "TRAINING", "SHOP", "LOBBY", "WAVE_CLEAR", "VICTORY",
 ];
 
 /** Which actions are legal in which phase — anything else is ignored. */
@@ -124,11 +125,29 @@ const ALLOWED: Record<GameAction["type"], Phase[]> = {
   REMOTE_HIT: DUEL_FIGHT,
   REMOTE_HP: [...DUEL_FIGHT, "LOBBY"],
   DUEL_RESULT: [...DUEL_FIGHT, "DEFEAT", "VICTORY"],
+  NEXT_WAVE: ["WAVE_CLEAR"],
   TRAIN_SELECT: ["TRAINING"],
   TRAIN_HIT: ["TRAINING"],
 };
 
 export const COUNTDOWN_FROM = 3;
+
+// --- Endless survival ----------------------------------------------------------
+/** Every 5th wave is a boss wave: tougher enemy, double reward. */
+export const BOSS_WAVE_EVERY = 5;
+export const isBossWave = (wave: number) => wave % BOSS_WAVE_EVERY === 0;
+/** Enemy chakra for a wave. */
+export function waveHp(wave: number): number {
+  const base = 650 + (wave - 1) * 110;
+  return Math.round(base * (isBossWave(wave) ? 1.6 : 1));
+}
+/** Ryō paid for clearing a wave (banked immediately — nothing is lost on defeat). */
+export function waveReward(wave: number): number {
+  const base = 40 + wave * 20;
+  return isBossWave(wave) ? base * 2 : base;
+}
+/** Chakra restored between waves: 20% (a boss wave restores 50% and gives a shield). */
+export const waveHeal = (wave: number, max: number) => Math.round(max * (isBossWave(wave) ? 0.5 : 0.2));
 
 export const enraged = (s: GameState) => s.bossHp > 0 && s.bossHp <= s.bossMaxHp * RAGE_AT;
 
@@ -141,6 +160,7 @@ export function timeLimit(s: GameState, base: number): number {
 /** Chakra a wrong seal costs (grows through the story). */
 export function mistakeCost(s: GameState): number {
   let base = 9;
+  if (s.mode === "survival" && s.survival) base = Math.min(16, 7 + Math.floor(s.survival.wave / 2));
   if (s.mode === "story" && s.chapter != null) base = 6 + Math.round((s.chapter / Math.max(1, CHAPTERS.length - 1)) * 6);
   if (s.mode === "duel") base = 60;
   return Math.max(1, Math.round(base * focusMult(s.upgrades)));
@@ -174,6 +194,7 @@ export function availableJutsu(s: GameState): JutsuId[] {
 /** Where the current fight takes place. */
 export function locationFor(s: GameState): Location {
   if (s.mode === "story" && s.chapter != null) return LOCATIONS[CHAPTERS[s.chapter].location];
+  if (s.mode === "survival" && s.survival) return LOCATIONS[QUICK_ROTATION[(s.survival.wave - 1) % QUICK_ROTATION.length]];
   return LOCATIONS[QUICK_ROTATION[(s.round - 1) % QUICK_ROTATION.length]];
 }
 
@@ -185,7 +206,11 @@ export function dialogueLines(s: GameState) {
 
 /** How hard the enemy hits back when a jutsu fails (grows through the story). */
 export function enemyAttack(s: GameState): number {
-  const base = s.mode === "story" && s.chapter != null ? 22 + Math.round((s.chapter / Math.max(1, CHAPTERS.length - 1)) * 20) : 34;
+  let base = s.mode === "story" && s.chapter != null ? 22 + Math.round((s.chapter / Math.max(1, CHAPTERS.length - 1)) * 20) : 34;
+  if (s.mode === "survival" && s.survival) {
+    const w = s.survival.wave;
+    base = Math.min(72, 24 + Math.round(w * 2.5)) * (isBossWave(w) ? 1.2 : 1);
+  }
   return Math.round(base * (enraged(s) ? RAGE_MULT : 1));
 }
 
@@ -217,6 +242,23 @@ function startFight(s: GameState): GameState {
 function endDialogue(s: GameState): GameState {
   if (s.dialogue?.part === "intro") return startFight(s);
   return { ...s, phase: "CHAPTER_SELECT", dialogue: null };
+}
+
+/** Survival: the wave's enemy is down — bank the ryō, restore some chakra, wait for the next one. */
+function clearWave(s: GameState): GameState {
+  const sv = s.survival!;
+  const reward = waveReward(sv.wave);
+  const heal = Math.min(s.playerMaxHp - s.playerHp, waveHeal(sv.wave, s.playerMaxHp));
+  const shield = isBossWave(sv.wave) ? 1 : 0;
+  return {
+    ...s,
+    phase: "WAVE_CLEAR",
+    bossHp: 0,
+    playerHp: s.playerHp + heal,
+    status: { ...s.status, shield: s.status.shield + shield },
+    survival: { ...sv, earned: sv.earned + reward, lastReward: reward, healed: heal },
+    eventId: s.eventId + 1,
+  };
 }
 
 export function gameReducer(s: GameState, a: GameAction): GameState {
@@ -287,6 +329,10 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
     case "SELECT_CHARACTER":
       if (s.mode === "story") return { ...s, characterId: a.id, phase: "CHAPTER_SELECT" };
       if (s.mode === "duel") return { ...s, characterId: a.id, phase: "LOBBY", duel: null };
+      if (s.mode === "survival") {
+        const hp = waveHp(1);
+        return startFight({ ...s, characterId: a.id, bossId: a.bossId ?? bossFor(a.id), bossHp: hp, bossMaxHp: hp, survival: { wave: 1, earned: 0, lastReward: 0, healed: 0 } });
+      }
       return startFight({ ...s, characterId: a.id, bossId: a.bossId ?? bossFor(a.id), bossHp: BOSS.maxHp, bossMaxHp: BOSS.maxHp });
 
     case "CHANGE_CHARACTER":
@@ -497,6 +543,7 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
     }
 
     case "CAST_DONE": {
+      if (s.bossHp <= 0 && s.mode === "survival") return clearWave(s);
       if (s.bossHp <= 0 && s.mode !== "duel") return { ...s, phase: "VICTORY" };
       // End of round: damage over time, then the enemy answers.
       let st = s;
@@ -516,6 +563,7 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
       const report = { burn, summon, retaliation: 0, blocked: false, staggered: false, healed: 0, id: s.eventId + 1 };
       // Duel: the win is decided by the opponent's own client (it reports its KO); no AI retaliation.
       if (s.mode === "duel") return { ...st, phase: "NEXT_ROUND", lastRound: report, eventId: s.eventId + 1 };
+      if (bossHp <= 0 && s.mode === "survival") return clearWave({ ...st, lastRound: report, eventId: s.eventId + 1 });
       if (bossHp <= 0) return { ...st, phase: "VICTORY", lastRound: report, eventId: s.eventId + 1 };
       // A perfect jutsu staggers the enemy; otherwise it retaliates.
       if (s.lastCast?.perfect) {
@@ -541,7 +589,22 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
       // "Next jutsu": move on to the next of the three.
       return startRound(s, s.slot + 1);
 
+    case "NEXT_WAVE": {
+      if (!s.survival) return s;
+      const wave = s.survival.wave + 1;
+      const hp = waveHp(wave);
+      // Same three jutsu, same (partly restored) chakra; the next enemy steps in.
+      return startRound(
+        { ...s, bossId: a.bossId, bossHp: hp, bossMaxHp: hp, round: 1, survival: { ...s.survival, wave }, lastRound: null, lastEnemyHit: null, status: { ...s.status, burn: null, summon: null }, eventId: s.eventId + 1 },
+        s.slot + 1,
+      );
+    }
+
     case "RESTART":
+      if (s.mode === "survival") {
+        const hp = waveHp(1);
+        return startFight({ ...s, bossHp: hp, bossMaxHp: hp, survival: { wave: 1, earned: 0, lastReward: 0, healed: 0 }, eventId: s.eventId + 1 });
+      }
       return startFight({ ...s, bossHp: s.bossMaxHp, eventId: s.eventId + 1 });
 
     case "QUIT":

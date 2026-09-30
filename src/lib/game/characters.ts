@@ -328,3 +328,13 @@ export function damageMultiplier(ch: Character | null, el: Element): number {
   if (!ch) return 1;
   return (ch.dmg.all ?? 1) * (ch.dmg[el] ?? 1);
 }
+
+/** Boss-wave opponents in survival (every 5th wave). */
+const SURVIVAL_BOSSES: CharacterId[] = ["madara", "kaguya", "isshiki", "momoshiki", "obito-six-paths", "pain", "itachi", "indra", "nagato", "orochimaru"];
+
+/** Survival: a random opponent for a wave — never the player, never the same twice in a row. */
+export function survivalBossFor(player: CharacterId, wave: number, previous: CharacterId | null, rnd = Math.random): CharacterId {
+  const pool0 = wave % 5 === 0 ? SURVIVAL_BOSSES : VILLAINS;
+  const pool = pool0.filter((v) => v !== player && v !== previous && !v.startsWith(player) && !player.startsWith(v));
+  return pool[Math.floor(rnd() * pool.length)] ?? bossFor(player);
+}

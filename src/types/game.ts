@@ -22,6 +22,7 @@ export type Phase =
   | "TRAINING"
   | "SHOP"
   | "LOBBY"
+  | "WAVE_CLEAR"
   | "VICTORY";
 
 export type Element = "fire" | "water" | "lightning" | "chakra" | "wind";
@@ -61,7 +62,7 @@ export interface RoundReport {
   healed: number;
   id: number;
 }
-export type GameMode = "story" | "quick" | "training" | "duel";
+export type GameMode = "story" | "quick" | "training" | "duel" | "survival";
 
 export interface Jutsu {
   id: JutsuId;
@@ -134,6 +135,8 @@ export interface GameState {
   lastRound: RoundReport | null;
   /** Chakra lost to the last wrong seal (for the UI). */
   lastMistakeCost: { hp: number; ms: number; id: number } | null;
+  /** Endless survival: current wave and the ryō banked so far this run. */
+  survival: { wave: number; earned: number; lastReward: number; healed: number } | null;
   /** Dojo (training mode): current target seal, streak and mastered seals. */
   training: { sign: SignId; streak: number; mastered: SignId[]; hits: number } | null;
   jutsuId: JutsuId | null;
@@ -185,6 +188,7 @@ export type GameAction =
   | { type: "BACK_TO_SELECTION" }
   | { type: "RESTART" }
   | { type: "QUIT" }
+  | { type: "NEXT_WAVE"; bossId: CharacterId }
   | { type: "TRAIN_SELECT"; sign: SignId }
   | { type: "TRAIN_HIT" };
 

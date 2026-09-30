@@ -151,14 +151,26 @@ export function DefeatPanel({ onExit }: { onExit: () => void }) {
   const g = useGame();
   const foe = g.bossId ? CHARACTERS[g.bossId] : null;
   const story = g.mode === "story";
+  const survival = g.mode === "survival" ? session.lastSurvival : null;
   return (
     <div className="result defeat">
       {foe && <Portrait ch={foe} className="result-hero defeat-foe" />}
       <div className="result-card defeat-card">
         <div className="defeat-kanji">敗</div>
         <div className="result-head">{t("defeat")}</div>
-        <div className="result-sub">{g.mode === "duel" ? t("duelLose", { nick: g.duel?.opponentNick ?? "?" }) : t("defeatSub", { foe: foe ? tr(foe.name) : "?" })}</div>
-        {session.lastReward != null && (
+        <div className="result-sub">{g.mode === "duel" ? t("duelLose", { nick: g.duel?.opponentNick ?? "?" }) : survival ? t("survivalOver", { n: g.survival?.wave ?? 1 }) : t("defeatSub", { foe: foe ? tr(foe.name) : "?" })}</div>
+        {survival && (
+          <div className="survival-sum">
+            {survival.isNew && <div className="sv-new">{t("survivalNewBest")}</div>}
+            <div className="sv-waves">
+              <b>{survival.waves}</b>
+              <span>{t("wave")}</span>
+            </div>
+            <div className="sv-line">{t("survivalStats", { w: survival.waves, r: survival.earned })}</div>
+            {!survival.isNew && <div className="sv-line dim">{t("survivalBestLine", { n: session.getSurvivalBest().wave })}</div>}
+          </div>
+        )}
+        {session.lastReward != null && !survival && (
           <div className="reward-line">
             <span className="purse-coin">両</span> {t("rewardLine", { n: session.lastReward })}
           </div>
@@ -168,7 +180,7 @@ export function DefeatPanel({ onExit }: { onExit: () => void }) {
         <div className="result-actions">
           {g.mode !== "duel" && (
             <button className="btn primary" onClick={() => session.dispatch({ type: "RESTART" })} data-action="rematch">
-              {t("tryFightAgain")}
+              {survival ? t("survivalAgain") : t("tryFightAgain")}
             </button>
           )}
           {story ? (

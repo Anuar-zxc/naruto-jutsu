@@ -31,6 +31,7 @@ export default function ShinobiApp() {
     else setTimeout(warm, 1200);
     session.loadProgress();
     session.loadRecords();
+    session.loadSurvivalBest();
     session.loadProfile();
     // Tell the duel opponent we're gone when the tab closes.
     const bye = () => session.leaveRoom();

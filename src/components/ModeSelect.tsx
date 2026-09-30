@@ -15,8 +15,10 @@ export function ModeSelect() {
   const session = useSession();
   const [best, setBest] = useState<number | null>(null);
   const [mastered, setMastered] = useState(0);
+  const [bestWave, setBestWave] = useState(0);
   useEffect(() => {
     setBest(session.getRecords().quick?.score ?? null);
+    setBestWave(session.getSurvivalBest().wave);
     try {
       const v = JSON.parse(localStorage.getItem("shinobi.dojo") ?? "[]");
       setMastered(Array.isArray(v) ? v.filter((x) => SIGN_LIST.some((d) => d.id === x)).length : 0);
@@ -39,6 +41,7 @@ export function ModeSelect() {
   const cards: { id: string; cls: string; kanji: string; title: string; desc: string; meta?: string; bg: string; hero: CharacterId; accent: string; onClick: () => void }[] = [
     { id: "story", cls: "story", kanji: "物語", title: t("storyTitle"), desc: t("storyDesc"), bg: bg("valley"), hero: "naruto-six-paths", accent: "#e63946", onClick: () => pick("story") },
     { id: "quick", cls: "quick", kanji: "決闘", title: t("quickTitle"), desc: t("quickDesc"), meta: best != null ? t("bestScore", { n: best.toLocaleString("en-US") }) : undefined, bg: bg("war"), hero: "sasuke", accent: "#2ec5ff", onClick: () => pick("quick") },
+    { id: "survival", cls: "survival", kanji: "生存", title: t("survivalTitle"), desc: t("survivalDesc"), meta: bestWave > 0 ? t("survivalBest", { n: bestWave }) : undefined, bg: bg("redmoon"), hero: "might-guy", accent: "#ff7a1a", onClick: () => pick("survival") },
     { id: "duel", cls: "duel", kanji: "対戦", title: t("duelTitle"), desc: t("duelDesc"), bg: bg("arena"), hero: "itachi", accent: "#9d4eff", onClick: () => pick("duel") },
     { id: "training", cls: "dojo", kanji: "修行", title: t("dojoTitle"), desc: t("dojoDesc"), meta: t("dojoMastered", { m: mastered, n: SIGN_LIST.length }), bg: bg("canyon"), hero: "kakashi", accent: "#ffc15e", onClick: () => pick("training") },
     { id: "shop", cls: "shop-card-mode", kanji: "店", title: t("shopTitle"), desc: t("shopDesc"), meta: `両 ${profile.ryo.toLocaleString("en-US")} ${t("ryo")}`, bg: bg("villagenight"), hero: "jiraiya", accent: "#5dffc1", onClick: openShop },

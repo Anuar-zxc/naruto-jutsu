@@ -118,6 +118,10 @@ Zodiac sequences come from fan seal guides for the series (sources vary on some)
 - Every jutsu has its own animation: Rasengan dash and spiral, Chidori crackle-dash-pierce, Great Fireball, Dragon Flame jet, Phoenix Flower volley, Water Dragon, Shadow Clones rushing in, a summoned toad stomp, substitution log, the fūma-shuriken transformation, Kirin from the sky and the Rasenshuriken dome.
 - The enemy lunges across the stage to counter-attack; hits knock fighters back.
 
+## Endless survival
+
+Waves of random enemies that never end. Pick your three jutsu once; every cleared wave banks ryō immediately (40 + 20 × wave), restores 20 % chakra and brings the next enemy with more HP and harder hits. Every 5th wave is a boss (Madara, Kaguya, Isshiki…) with 1.6× HP, double pay, 50 % heal and a free shield. The run ends when your chakra runs out; the best wave is saved.
+
 ## Finger control
 
 In menus, point with your index finger: the fingertip moves a cursor. **Pinch** (thumb to index) or **hold still for 1 s** over a button to click it. Toggle it with ☝ in the top bar. While you make seals, the cursor is off.
