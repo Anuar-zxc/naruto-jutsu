@@ -5962,3 +5962,30 @@ html.lowfx .mm-bg-img {
     transform: rotate(-8deg) translateY(-30px);
   }
 }
+
+/* thicker roster cards — the select screen has room to spare */
+.char-wall-overlay {
+  --cc-h: clamp(62px, calc((100dvh - 240px) / 7 - 6px), 124px);
+  --cc-w: calc(var(--cc-h) * 0.95);
+}
+@media (min-width: 1600px) {
+  .char-wall-overlay {
+    --cc-w: calc(var(--cc-h) * 1.12);
+  }
+  .char-wall {
+    width: min(1880px, 98vw);
+  }
+}
+.char-wall .char-side {
+  gap: 7px;
+}
+.char-wall .char-card .char-card-img,
+.char-wall .char-card .silhouette {
+  height: calc(var(--cc-h) * 1.85);
+}
+.char-wall .cc-name {
+  font-size: clamp(12px, calc(var(--cc-h) * 0.15), 16px);
+}
+.char-wall .cc-tag {
+  font-size: 8px;
+}
