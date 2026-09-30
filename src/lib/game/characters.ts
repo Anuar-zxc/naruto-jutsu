@@ -12,6 +12,8 @@ import type { L } from "@/types/i18n";
 
 export type CharacterId =
   | "naruto"
+  | "anuar"
+  | "adelya"
   | "naruto-six-paths"
   | "sakura"
   | "kakashi"
@@ -91,6 +93,8 @@ export interface Character {
   perk: L;
   timeBonusMs: number;
   dmg: Partial<Record<Element | "all", number>>;
+  /** Multiplies the fighter's max chakra (default 1). */
+  chakraMult?: number;
 }
 
 const img = (id: string) => `/assets/characters/${id}.webp`;
@@ -101,7 +105,7 @@ function c(
   title: L,
   color: string,
   glyph: string,
-  opts: { villain?: boolean; playable?: boolean; tag?: L; perk?: L; timeBonusMs?: number; dmg?: Character["dmg"] } = {},
+  opts: { villain?: boolean; playable?: boolean; tag?: L; perk?: L; timeBonusMs?: number; dmg?: Character["dmg"]; chakraMult?: number } = {},
 ): Character {
   return {
     id,
@@ -116,6 +120,7 @@ function c(
     perk: opts.perk ?? { ru: "—", en: "—" },
     timeBonusMs: opts.timeBonusMs ?? 0,
     dmg: opts.dmg ?? {},
+    chakraMult: opts.chakraMult,
   };
 }
 
@@ -250,6 +255,19 @@ export const CHARACTERS: Record<CharacterId, Character> = {
     timeBonusMs: -2000,
     dmg: { all: 1.2 },
   }),
+  // --- the team ---
+  anuar: c("anuar", { ru: "Ануар", en: "Anuar" }, { ru: "Создатель Naruto Jutsu", en: "Creator of Naruto Jutsu" }, "#f2c230", "創", {
+    tag: { ru: "СОЗДАТЕЛЬ", en: "CREATOR" },
+    perk: { ru: "Код-ниндзя: +3 с и +15% урона ко всему", en: "Code ninja: +3s and +15% all damage" },
+    timeBonusMs: 3000,
+    dmg: { all: 1.15 },
+  }),
+  adelya: c("adelya", { ru: "Аделя Узумаки", en: "Adelya Uzumaki" }, { ru: "Бесконечная чакра клана Узумаки", en: "Endless Uzumaki Chakra" }, "#c2185b", "渦", {
+    tag: { ru: "УЗУМАКИ", en: "UZUMAKI" },
+    perk: { ru: "Бесконечная чакра: ×2 чакры, +20% к чакре", en: "Endless chakra: ×2 max chakra, +20% Chakra damage" },
+    chakraMult: 2,
+    dmg: { chakra: 1.2 },
+  }),
   // --- v12 roster expansion ---
   "rock-lee": c("rock-lee", { ru: "Рок Ли", en: "Rock Lee" }, { ru: "Зелёный зверь тайдзюцу", en: "Taijutsu Green Beast" }, "#2f9e44", "蓮", { perk: { ru: "+4 с, +5% урона", en: "+4s, +5% all damage" }, timeBonusMs: 4000, dmg: { all: 1.05 } }),
   "might-guy": c("might-guy", { ru: "Майто Гай", en: "Might Guy" }, { ru: "Восемь врат", en: "Eight Gates" }, "#26a65b", "剛", { perk: { ru: "+20% урона ко всему", en: "+20% all damage" }, dmg: { all: 1.2 } }),
@@ -295,7 +313,7 @@ export const CHARACTERS: Record<CharacterId, Character> = {
 /** Display order on the select screen: heroes first, then rogues. */
 const ORDER: CharacterId[] = [
   // Base Naruto is hidden from the roster (his artwork was replaced by the Six Paths form).
-  "naruto-six-paths", "sasuke", "sakura", "kakashi", "minato", "jiraiya", "hashirama",
+  "anuar", "adelya", "naruto-six-paths", "sasuke", "sakura", "kakashi", "minato", "jiraiya", "hashirama",
   "shikamaru", "shisui", "boruto", "boruto-karma", "mitsuki",
   "rock-lee", "might-guy", "neji", "hinata", "gaara", "temari", "kankuro", "tsunade", "hiruzen", "tobirama", "asuma", "kurenai", "yamato", "sai", "kiba", "shino", "choji", "ino", "tenten", "iruka", "konohamaru", "sarada", "kushina", "killer-bee", "raikage", "mei", "onoki",
   "itachi", "kisame", "hidan", "konan", "pain", "kawaki", "obito", "obito-six-paths", "madara", "momoshiki", "isshiki",

@@ -78,8 +78,10 @@ async function main() {
       unlocked.push(...ch.unlocks);
     }
     assert.deepEqual([...unlocked].sort(), [...JUTSU_LIST.map((j) => j.id)].sort());
-    assert.equal(CHARACTER_LIST.length, 62);
-    assert.equal(new Set(CHARACTER_LIST.map((c) => c.id)).size, 62, "no duplicate ids");
+    assert.equal(CHARACTER_LIST.length, 64);
+    assert.equal(new Set(CHARACTER_LIST.map((c) => c.id)).size, 64, "no duplicate ids");
+    const adelya = reduce(menu(), { type: "SELECT_MODE", mode: "quick" }, { type: "SELECT_CHARACTER", id: "adelya", bossId: "pain" });
+    assert.equal(adelya.playerMaxHp, 2 * PLAYER_MAX_HP, "Adelya: endless (double) chakra");
     assert.ok(!CHARACTER_LIST.some((c) => c.id === "naruto"), "base Naruto is off the roster");
     for (const c of CHARACTER_LIST) assert.ok(existsSync(`public${c.image}`), `artwork for ${c.id}`);
   });

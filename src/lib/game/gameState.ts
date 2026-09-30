@@ -233,7 +233,8 @@ export function enemyAttack(s: GameState): number {
 }
 
 function startFight(s: GameState): GameState {
-  const maxHp = Math.round((s.mode === "duel" ? DUEL_HP : PLAYER_MAX_HP) * hpMult(s.upgrades));
+  const heroChakra = (s.characterId && CHARACTERS[s.characterId].chakraMult) || 1;
+  const maxHp = Math.round((s.mode === "duel" ? DUEL_HP : PLAYER_MAX_HP) * hpMult(s.upgrades) * heroChakra);
   return {
     ...s,
     phase: "JUTSU_SELECTION",
