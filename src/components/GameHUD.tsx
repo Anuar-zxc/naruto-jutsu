@@ -18,9 +18,11 @@ interface Props {
   debug: boolean;
   onToggleDebug: () => void;
   onQuit: () => void;
+  voiceOn?: boolean;
+  onToggleVoice?: () => void;
 }
 
-export function GameHUD({ muted, onToggleMute, musicOn, onToggleMusic, debug, onToggleDebug, onQuit }: Props) {
+export function GameHUD({ muted, onToggleMute, musicOn, onToggleMusic, debug, onToggleDebug, onQuit, voiceOn, onToggleVoice }: Props) {
   useLang();
   const g = useGame();
   const mult = comboMultiplier(g.stats.combo);
@@ -71,6 +73,11 @@ export function GameHUD({ muted, onToggleMute, musicOn, onToggleMusic, debug, on
       )}
       <div className="hud-actions">
         <LangToggle />
+        {onToggleVoice && (
+          <button className={`icon-btn ${voiceOn ? "on-gold" : "off"}`} onClick={onToggleVoice} title={t("voiceTitle")} aria-label={t("voiceTitle")} data-action="voice">
+            🎤
+          </button>
+        )}
         <button
           className={`icon-btn hand-btn ${hand ? "on-gold" : "off"}`}
           onClick={() => {

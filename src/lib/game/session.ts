@@ -215,6 +215,24 @@ export class GameSession {
     return { key, best: prev, isNew };
   }
 
+  // --- photo of the player's final seal (for the battle card) -----------------------
+  /** JPEG data URL of the camera at the last completed seal sequence of this fight. */
+  snapshot: string | null = null;
+  captureSnapshot(src: HTMLCanvasElement | null) {
+    if (!src || !src.width) return;
+    try {
+      const w = 640;
+      const h = Math.round((src.height / src.width) * w);
+      const c = document.createElement("canvas");
+      c.width = w;
+      c.height = h;
+      c.getContext("2d")?.drawImage(src, 0, 0, w, h);
+      this.snapshot = c.toDataURL("image/jpeg", 0.82);
+    } catch {
+      /* tainted or unavailable — the card simply goes without a photo */
+    }
+  }
+
   // --- survival best run, persisted per browser ---------------------------------
   private survivalBest: { wave: number; earned: number } = { wave: 0, earned: 0 };
   /** Result of the survival run that just ended (for the result panel). */

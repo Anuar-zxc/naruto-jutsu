@@ -61,6 +61,8 @@ const TAG_KEY = {
   heal: "tagHeal",
   recoil: "tagRecoil",
   combo: "tagCombo",
+  sage: "tagSage",
+  shout: "tagShout",
 } as const;
 
 export function tagText(tag: string): string | null {

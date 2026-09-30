@@ -35,6 +35,17 @@ export const RAGE_MULT = 1.35;
 /** Enemy retaliation after a cast = this share of its full strike (a perfect cast staggers it: no retaliation). */
 export const RETALIATION = 0.4;
 
+/** Sage gauge: what charges it, and what a full gauge does to the next jutsu. */
+export const SAGE_MAX = 100;
+export const SAGE_PER_SEAL = 5;
+export const SAGE_PERFECT = 10;
+export const SAGE_HIT_TAKEN = 10;
+export const SAGE_MISTAKE = 10;
+export const SAGE_MULT = 1.6;
+/** Shouting the jutsu's name while casting. */
+export const SHOUT_MULT = 1.2;
+const addSage = (v: number, d: number) => Math.max(0, Math.min(SAGE_MAX, v + d));
+
 export const emptyStatus = (): Status => ({ shield: 0, boost: 1, burn: null, summon: null });
 /** Seal holds in a row needed to "master" a seal in the dojo. */
 export const TRAIN_MASTERY = 3;
@@ -83,6 +94,8 @@ export const initialGameState = (): GameState => ({
   stats: emptyStats(),
   lastCast: null,
   lastPoints: null,
+  sage: 0,
+  shout: false,
   eventId: 0,
 });
 
@@ -129,6 +142,7 @@ const ALLOWED: Record<GameAction["type"], Phase[]> = {
   REMOTE_HP: [...DUEL_FIGHT, "LOBBY"],
   DUEL_RESULT: [...DUEL_FIGHT, "DEFEAT", "VICTORY"],
   NEXT_WAVE: ["WAVE_CLEAR"],
+  SHOUT: ["COUNTDOWN", "PLAYING", "SUCCESS"],
   TRAIN_SELECT: ["TRAINING"],
   TRAIN_HIT: ["TRAINING"],
 };
@@ -179,7 +193,7 @@ export const loadoutSize = (s: GameState) => Math.min(LOADOUT_SIZE, availableJut
 function startRound(s: GameState, slot: number): GameState {
   const id = s.loadout[slot % s.loadout.length];
   const j = JUTSU[id];
-  return { ...s, phase: "COUNTDOWN", slot: slot % s.loadout.length, jutsuId: id, seqIndex: 0, timeLeftMs: timeLimit(s, j.timeLimitMs), countdown: COUNTDOWN_FROM, jutsuMistakes: 0 };
+  return { ...s, phase: "COUNTDOWN", shout: false, slot: slot % s.loadout.length, jutsuId: id, seqIndex: 0, timeLeftMs: timeLimit(s, j.timeLimitMs), countdown: COUNTDOWN_FROM, jutsuMistakes: 0 };
 }
 
 /** Enemy hits the player (shield absorbs it). Returns the new state + what happened. */
@@ -187,7 +201,7 @@ function enemyHits(s: GameState, amount: number): { s: GameState; taken: number;
   if (amount <= 0) return { s, taken: 0, blocked: false };
   if (s.status.shield > 0) return { s: { ...s, status: { ...s.status, shield: s.status.shield - 1 } }, taken: 0, blocked: true };
   const taken = Math.min(s.playerHp, amount);
-  return { s: { ...s, playerHp: s.playerHp - taken }, taken, blocked: false };
+  return { s: { ...s, playerHp: s.playerHp - taken, sage: addSage(s.sage, SAGE_HIT_TAKEN) }, taken, blocked: false };
 }
 
 /** Jutsu the player may choose right now. */
@@ -232,6 +246,7 @@ function startFight(s: GameState): GameState {
     lastMistakeCost: null,
     duel: s.duel ? { ...s.duel, ready: false } : null,
     status: { ...emptyStatus(), shield: startShields(s.upgrades) },
+    sage: 0,
     slot: 0,
     // Keep the previous picks (handy for a rematch) if they're still available.
     loadout: s.loadout.filter((id) => availableJutsu(s).includes(id)).slice(0, LOADOUT_SIZE),
@@ -451,6 +466,7 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
         ...s,
         seqIndex,
         stats,
+        sage: addSage(s.sage, SAGE_PER_SEAL),
         eventId: s.eventId + 1,
         lastPoints: { ...pts, id: s.eventId + 1 },
         phase: seqIndex >= j.sequence.length ? "SUCCESS" : "PLAYING",
@@ -470,6 +486,7 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
         lastMistakeCost: { hp, ms: MISTAKE_TIME_MS, id: s.eventId + 1 },
         phase: playerHp <= 0 ? "DEFEAT" : s.phase,
         jutsuMistakes: s.jutsuMistakes + 1,
+        sage: addSage(s.sage, -SAGE_MISTAKE),
         eventId: s.eventId + 1,
         stats: { ...s.stats, mistakes: s.stats.mistakes + 1, combo: 0, weak },
       };
@@ -484,6 +501,15 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
       let mult = damageMultiplier(hero, j.element) * powerMult(s.upgrades);
       let status = { ...s.status };
       let playerHp = s.playerHp;
+      if (s.shout) {
+        mult *= SHOUT_MULT;
+        tags.push("shout");
+      }
+      const sageCast = s.sage >= SAGE_MAX;
+      if (sageCast) {
+        mult *= SAGE_MULT;
+        tags.push("sage");
+      }
       if (status.boost > 1) {
         mult *= status.boost;
         tags.push("boosted");
@@ -535,6 +561,9 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
         bossHp,
         playerHp,
         status,
+        // A full gauge is spent on this cast; otherwise a perfect cast charges it further.
+        sage: sageCast ? 0 : addSage(s.sage, r.perfect ? SAGE_PERFECT : 0),
+        shout: false,
         lastCast: { jutsuId: j.id, ...r, damage, tags },
         stats: {
           ...s.stats,
@@ -592,6 +621,10 @@ export function gameReducer(s: GameState, a: GameAction): GameState {
     case "BACK_TO_SELECTION":
       // "Next jutsu": move on to the next of the three.
       return startRound(s, s.slot + 1);
+
+    case "SHOUT":
+      if (!s.jutsuId || s.shout) return s;
+      return { ...s, shout: true, eventId: s.eventId + 1 };
 
     case "NEXT_WAVE": {
       if (!s.survival) return s;

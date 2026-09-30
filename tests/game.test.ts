@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
  * REAL recognizer.
  */
 import assert from "node:assert/strict";
-import { DUEL_HP, isBossWave, waveHp, waveReward, MISTAKE_TIME_MS, PLAYER_MAX_HP, RETALIATION, TRAIN_MASTERY, availableJutsu, dialogueLines, enemyAttack, enraged, gameReducer, initialGameState, mistakeCost, timeLimit } from "../src/lib/game/gameState";
+import { DUEL_HP, SAGE_MAX, SAGE_MULT, SAGE_PER_SEAL, isBossWave, waveHp, waveReward, MISTAKE_TIME_MS, PLAYER_MAX_HP, RETALIATION, TRAIN_MASTERY, availableJutsu, dialogueLines, enemyAttack, enraged, gameReducer, initialGameState, mistakeCost, timeLimit } from "../src/lib/game/gameState";
 import { JUTSU, JUTSU_LIST } from "../src/lib/game/jutsu";
 import { rankFor, accuracy } from "../src/lib/game/scoring";
 import { comboMultiplier } from "../src/lib/game/combo";
@@ -258,6 +258,35 @@ async function main() {
     assert.ok(linesFor(CHAPTERS[6], "outro", "naruto", "kimimaro").some((l) => l.who === "gaara"));
     const kak = reduce(menu(), { type: "SELECT_MODE", mode: "story" }, { type: "SELECT_CHARACTER", id: "kakashi" }, { type: "SELECT_CHAPTER", index: 0 });
     assert.equal(kak.bossId, "jiraiya", "mentor is never the player");
+  });
+
+  await test("sage gauge: seals charge it, a mistake drains it, a full gauge empowers the next jutsu ×1.6 and empties", () => {
+    let s = reduce(quick(), { type: "TOGGLE_LOADOUT", id: "CHIDORI" }, { type: "TOGGLE_LOADOUT", id: "RASENGAN" }, { type: "TOGGLE_LOADOUT", id: "KIRIN" }, { type: "CONFIRM_LOADOUT" });
+    assert.equal(s.sage, 0);
+    const normal = cast(s, "CHIDORI");
+    assert.equal(normal.sage, SAGE_PER_SEAL * 3 + 10, "3 seals + perfect bonus");
+    assert.ok(!normal.lastCast!.tags.includes("sage"));
+    const full = cast({ ...s, sage: SAGE_MAX - 1 }, "CHIDORI");
+    assert.ok(full.lastCast!.tags.includes("sage"));
+    assert.equal(full.sage, 0, "spent");
+    assert.equal(full.lastCast!.damage, Math.round(normal.lastCast!.damage * SAGE_MULT));
+    const miss = reduce({ ...s, sage: 50 }, ...go, { type: "MISTAKE", sign: null });
+    assert.equal(miss.sage, 40);
+  });
+
+  await test("shout: saying the jutsu name while casting adds ×1.2 once; the word list matches ru and romaji", async () => {
+    const { matchShout } = await import("../src/lib/audio/voice");
+    assert.equal(matchShout("РАСЕНГАН!!!", "RASENGAN"), "расенган");
+    assert.equal(matchShout("rasengan", "RASENGAN"), "rasengan");
+    assert.equal(matchShout("чидори", "RASENGAN"), null);
+    let s = reduce(quick(), { type: "TOGGLE_LOADOUT", id: "CHIDORI" }, { type: "TOGGLE_LOADOUT", id: "RASENGAN" }, { type: "TOGGLE_LOADOUT", id: "KIRIN" }, { type: "CONFIRM_LOADOUT" });
+    const plain = cast(s, "CHIDORI");
+    s = reduce(s, { type: "SHOUT" });
+    assert.equal(s.shout, true);
+    const loud = cast(s, "CHIDORI");
+    assert.ok(loud.lastCast!.tags.includes("shout"));
+    assert.equal(loud.lastCast!.damage, Math.round(plain.lastCast!.damage * 1.2));
+    assert.equal(loud.shout, false, "one shout per cast");
   });
 
   await test("survival: waves never end, each pays ryō, heals a little and brings a new enemy; boss every 5th", () => {

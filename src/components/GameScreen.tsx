@@ -25,7 +25,8 @@ import { ModeSelect } from "./ModeSelect";
 import { Portrait } from "./Portrait";
 import { locationFor } from "@/lib/game/gameState";
 import { CHAPTERS } from "@/lib/game/story";
-import { t, tr } from "@/lib/i18n";
+import { getLang, t, tr } from "@/lib/i18n";
+import { VoiceListener, matchShout, voiceSupported } from "@/lib/audio/voice";
 import { useLang } from "@/hooks/useLang";
 import { CameraView } from "./CameraView";
 import { CurrentSeal } from "./CurrentSeal";
@@ -39,7 +40,7 @@ import { Lobby } from "./Lobby";
 import { Shop } from "./Shop";
 import { LoadoutTray } from "./LoadoutTray";
 import { tagText } from "@/lib/game/effects";
-import { enraged, isBossWave } from "@/lib/game/gameState";
+import { SAGE_MAX, enraged, isBossWave } from "@/lib/game/gameState";
 import { askSensei, tauntRequest } from "@/lib/ai/sensei";
 
 const LS_MUTE = "shinobi.muted";
@@ -47,6 +48,7 @@ const LS_MUTE = "shinobi.muted";
 const FIGHT_PHASES = ["JUTSU_SELECTION", "COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED", "WAVE_CLEAR", "VICTORY", "DEFEAT"];
 // v2: music defaults back ON after the soundtrack update, even if it was switched off before.
 const LS_MUSIC = "shinobi.music.v2";
+const LS_VOICE = "shinobi.voice";
 
 function readMusic() {
   try {
@@ -96,6 +98,10 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
   const [reply, setReply] = useState<string | null>(null);
   const [vs, setVs] = useState<number | null>(null);
   const [audioToast, setAudioToast] = useState<{ text: string; key: number } | null>(null);
+  const [cutin, setCutin] = useState<number | null>(null);
+  const [voiceOn, setVoiceOn] = useState(false);
+  const [shoutPop, setShoutPop] = useState<{ word: string; key: number } | null>(null);
+  const voice = useRef<VoiceListener | null>(null);
 
   // Auto quality: if tracking can't keep up, drop the heavy decorative effects.
   useEffect(() => {
@@ -114,6 +120,48 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
     session.sfx.setMuted(m);
     session.music.setEnabled(!m && mu);
   }, [session]);
+
+  // Voice: shout the jutsu's name while casting (opt-in, needs the microphone).
+  useEffect(() => {
+    try {
+      setVoiceOn(localStorage.getItem(LS_VOICE) === "1" && voiceSupported());
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const fighting = ["JUTSU_SELECTION", "COUNTDOWN", "PLAYING", "SUCCESS", "JUTSU_CAST", "NEXT_ROUND", "FAILED", "WAVE_CLEAR"].includes(g.phase);
+  useEffect(() => {
+    if (!voiceOn || !fighting) {
+      voice.current?.stop();
+      voice.current = null;
+      return;
+    }
+    if (voice.current) return;
+    const v = new VoiceListener();
+    voice.current = v;
+    v.start(getLang() === "ru" ? "ru-RU" : "en-US", (text) => {
+      const st = session.getState();
+      if (!st.jutsuId || st.shout || !["COUNTDOWN", "PLAYING", "SUCCESS"].includes(st.phase)) return;
+      const word = matchShout(text, st.jutsuId);
+      if (!word) return;
+      session.dispatch({ type: "SHOUT" });
+      session.sfx.combo();
+      setShoutPop({ word: tr(JUTSU[st.jutsuId].name).toUpperCase(), key: Date.now() });
+    });
+  }, [voiceOn, fighting, session]);
+  useEffect(() => () => voice.current?.stop(), []);
+  const toggleVoice = useCallback(() => {
+    setVoiceOn((on) => {
+      const n = !on;
+      setAudioToast({ text: t(n ? "voiceOn" : "voiceOff"), key: Date.now() });
+      try {
+        localStorage.setItem(LS_VOICE, n ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return n;
+    });
+  }, []);
 
   // Soundtrack follows the scene.
   const track = trackFor(g.phase, g.bossHp, g.bossMaxHp);
@@ -289,6 +337,13 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
     if (g.phase === p.phase) return;
 
     if (g.phase === "SUCCESS" && j) {
+      // Keep a photo of the player's hands on the final seal — it goes on the battle card.
+      session.captureSnapshot(canvasRef.current);
+      if (g.sage >= SAGE_MAX) {
+        setCutin(Date.now());
+        setTimeout(() => setCutin(null), 1150);
+        session.sfx.announce("finish");
+      }
       const c = heroRef.current ? point(heroRef.current, 0.72, 0.42) : center(panelRef.current, 0.45);
       fx.current?.charge(c.x, c.y, j.element);
       setFlash({ color: j.glow, key: Date.now() });
@@ -373,7 +428,7 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
       <div className="game-bg">
         <ArenaBackdrop location={location} showName={false} />
       </div>
-      <GameHUD muted={muted} onToggleMute={toggleMute} musicOn={musicOn} onToggleMusic={toggleMusic} debug={debug} onToggleDebug={() => setDebug((d) => !d)} onQuit={quit} />
+      <GameHUD muted={muted} onToggleMute={toggleMute} musicOn={musicOn} onToggleMusic={toggleMusic} debug={debug} onToggleDebug={() => setDebug((d) => !d)} onQuit={quit} voiceOn={voiceOn} onToggleVoice={voiceSupported() ? toggleVoice : undefined} />
 
       <div className="game-main">
         <section className="col-camera">
@@ -472,6 +527,23 @@ export function GameScreen({ synthetic, initialDebug, onExit }: { synthetic: boo
           )}
           {g.phase === "JUTSU_CAST" && g.lastCast?.perfect && <div className="cb-perfect">{t("perfectJutsu", { n: g.lastCast.perfectBonus })}</div>}
           {g.phase === "JUTSU_CAST" && g.lastCast && g.lastCast.speedBonus > 0 && <div className="cb-bonus">{t("speedBonus", { n: g.lastCast.speedBonus })}</div>}
+        </div>
+      )}
+      {shoutPop && (
+        <div className="shout-pop" key={shoutPop.key} aria-hidden>
+          <span>{shoutPop.word}!</span>
+          <em>{t("tagShout")}</em>
+        </div>
+      )}
+      {cutin && hero && (
+        <div className="sage-cutin" key={cutin} aria-hidden>
+          <div className="sc-band">
+            <Portrait ch={hero} className="sc-img" />
+            <div className="sc-text">
+              <b>{t("sageCutin")}</b>
+              <em>仙人モード · ×1.6</em>
+            </div>
+          </div>
         </div>
       )}
       {g.phase === "WAVE_CLEAR" && g.survival && (

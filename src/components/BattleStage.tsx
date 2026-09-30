@@ -7,7 +7,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { CHARACTERS } from "@/lib/game/characters";
 import type { Location } from "@/lib/game/locations";
 import { t, tr } from "@/lib/i18n";
-import { isBossWave } from "@/lib/game/gameState";
+import { SAGE_MAX, isBossWave } from "@/lib/game/gameState";
 import { ArenaBackdrop } from "./ArenaBackdrop";
 import { Portrait } from "./Portrait";
 
@@ -62,6 +62,13 @@ export const BattleStage = forwardRef<HTMLDivElement, Props>(function BattleStag
           {hero && <Portrait ch={hero} className="mk-face" />}
           <div className="mk-info">
             <FightBar hp={g.playerHp} max={g.playerMaxHp} side="l" delayMs={0} />
+            <div className={`sage-bar ${g.sage >= SAGE_MAX ? "full" : ""}`} title={t("sageTip")} data-sage={g.sage}>
+              <span className="sb-kanji">仙</span>
+              <div className="sb-track">
+                <i style={{ width: `${(g.sage / SAGE_MAX) * 100}%` }} />
+              </div>
+              {g.sage >= SAGE_MAX && <em>{t("sageReady")}</em>}
+            </div>
             <div className="mk-name">
               {hero ? tr(hero.name).toUpperCase() : "—"}
               {profile.nick && <em>{profile.nick}</em>}
@@ -90,7 +97,7 @@ export const BattleStage = forwardRef<HTMLDivElement, Props>(function BattleStag
         <div className="mk-floor" aria-hidden />
         <div ref={heroRef} className={`fighter f-hero ${defeat ? "ko" : ""} ${victory ? "win" : ""}`} style={hero ? { ["--aura" as string]: hero.color } : undefined}>
           <div className="f-shadow" />
-          <div className="f-body">{hero && <Portrait ch={hero} className="f-img" key={hero.id} />}</div>
+          <div className={`f-body ${g.sage >= SAGE_MAX ? "sage" : ""}`}>{hero && <Portrait ch={hero} className="f-img" key={hero.id} />}</div>
           {enemyHit && (
             <div className="f-dmg bad" key={enemyHit.key}>
               −{enemyHit.amount}

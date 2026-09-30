@@ -8,6 +8,7 @@ import { CHAPTERS } from "@/lib/game/story";
 import { t, tr, type StrKey } from "@/lib/i18n";
 import { Portrait } from "./Portrait";
 import { SenseiReview } from "./SenseiReview";
+import { ShareCard } from "./ShareCard";
 import { useEffect, useState } from "react";
 import { askSensei, tauntRequest } from "@/lib/ai/sensei";
 
@@ -89,6 +90,7 @@ export function ResultScreen({ onExit }: { onExit: () => void }) {
               {t("fightAgain")}
             </button>
           )}
+          <ShareCard win />
           <button className="btn ghost" onClick={onExit}>
             {t("exit")}
           </button>
@@ -198,6 +200,7 @@ export function DefeatPanel({ onExit }: { onExit: () => void }) {
               {t("toMenu")}
             </button>
           )}
+          {g.mode !== "duel" && <ShareCard win={false} />}
           <button className="btn ghost" onClick={onExit}>
             {t("exit")}
           </button>

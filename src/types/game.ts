@@ -148,6 +148,10 @@ export interface GameState {
   lastCast: CastResult | null;
   /** Points awarded by the last correct seal (for the floating "+200" popup). */
   lastPoints: { amount: number; multiplier: number; id: number } | null;
+  /** Sage gauge 0..100: fills with clean seals, perfect casts and hits taken; when full the next jutsu is empowered. */
+  sage: number;
+  /** The player shouted the jutsu's name (speech recognition) — +20% on this cast. */
+  shout: boolean;
   /** Monotonic counter bumped on every seal/mistake so the UI can animate. */
   eventId: number;
 }
@@ -189,6 +193,7 @@ export type GameAction =
   | { type: "RESTART" }
   | { type: "QUIT" }
   | { type: "NEXT_WAVE"; bossId: CharacterId }
+  | { type: "SHOUT" }
   | { type: "TRAIN_SELECT"; sign: SignId }
   | { type: "TRAIN_HIT" };
 
