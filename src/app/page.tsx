@@ -1,5 +1,5 @@
-import ShinobiApp from "@/components/ShinobiApp";
+import { Ishara } from "@/ishara/Ishara";
 
-export default function Page() {
-  return <ShinobiApp />;
+export default function Home() {
+  return <Ishara />;
 }

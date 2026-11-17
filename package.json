@@ -1,19 +1,21 @@
 {
-  "name": "naruto-jutsu",
+  "name": "ishara",
   "version": "1.0.0",
   "private": true,
-  "description": "Webcam hand-sign battle game: MediaPipe hand tracking + custom gesture recognition + error mode.",
+  "description": "Kazakhstan fingerspelling learning studio",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "tsx tests/vision.test.ts && tsx tests/game.test.ts && tsx tests/ai.test.ts",
-    "postinstall": "node scripts/setup-mediapipe.mjs",
-    "prebuild": "node scripts/kanji.mjs"
+    "postinstall": "node scripts/setup-mediapipe.mjs"
   },
   "dependencies": {
+    "@fontsource-variable/golos-text": "^5.3.0",
+    "@fontsource-variable/manrope": "^5.3.0",
     "@mediapipe/tasks-vision": "^0.10.14",
+    "lucide-react": "^1.74.0",
     "next": "^15.5.7",
     "react": "^19.2.1",
     "react-dom": "^19.2.1"
@@ -26,6 +28,9 @@
     "typescript": "^5.6.0"
   },
   "engines": {
-    "node": ">=18.18"
+    "node": "24.x"
+  },
+  "overrides": {
+    "postcss": "8.5.33"
   }
 }

@@ -78,6 +78,8 @@ export class MediaPipeHandSource implements HandSource {
   private running = false;
   private lastVideoTime = -1;
   private lastTs = 0;
+  private cameraRequest = 0;
+  private disposed = false;
 
   async init() {
     if (this.landmarker) return;
@@ -100,7 +102,8 @@ export class MediaPipeHandSource implements HandSource {
       } catch {
         lm = await create("CPU");
       }
-      this.landmarker = lm as unknown as Landmarker;
+      if (this.disposed) lm.close();
+      else this.landmarker = lm as unknown as Landmarker;
     } catch (e) {
       console.error("[shinobi] model load failed", e);
       throw new CameraError("model", CAMERA_ERROR_TEXT.model);
@@ -110,8 +113,10 @@ export class MediaPipeHandSource implements HandSource {
   async openCamera(video: HTMLVideoElement) {
     if (typeof window !== "undefined" && !window.isSecureContext) throw new CameraError("insecure", CAMERA_ERROR_TEXT.insecure);
     if (!navigator.mediaDevices?.getUserMedia) throw new CameraError("unavailable", CAMERA_ERROR_TEXT.unavailable);
+    const request = ++this.cameraRequest;
+    let stream: MediaStream;
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({
+      stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
         // 960×540 is plenty for the hand model (it works on ~224 px crops) and halves the
         // per-frame upload / draw cost compared with 720p.
@@ -128,17 +133,20 @@ export class MediaPipeHandSource implements HandSource {
       }
       throw new CameraError("unknown", CAMERA_ERROR_TEXT.unknown);
     }
-    video.srcObject = this.stream;
+    if (this.disposed || this.cameraRequest !== request) {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+    this.stream = stream;
+    video.srcObject = stream;
     video.muted = true;
     video.playsInline = true;
-    await video.play().catch(() => undefined);
-    if (video.readyState < 2) {
-      await new Promise<void>((res) => video.addEventListener("loadeddata", () => res(), { once: true }));
-    }
+    await video.play();
   }
 
-  start(video: HTMLVideoElement, onFrame: (f: RawFrame | null) => void, detect: () => boolean = () => true) {
+  start(video: HTMLVideoElement, onFrame: (f: RawFrame | null) => void, detect: () => boolean = () => true, onError?: (error: unknown) => void) {
     this.running = true;
+    this.lastVideoTime = -1;
     const loop = () => {
       if (!this.running) return;
       this.raf = requestAnimationFrame(loop);
@@ -152,7 +160,15 @@ export class MediaPipeHandSource implements HandSource {
       if (ts <= this.lastTs) ts = this.lastTs + 1; // MediaPipe requires strictly increasing timestamps
       this.lastTs = ts;
 
-      const res = lm.detectForVideo(video, ts);
+      let res: ReturnType<Landmarker["detectForVideo"]>;
+      try {
+        res = lm.detectForVideo(video, ts);
+      } catch (error) {
+        this.stop();
+        if (onError) onError(error);
+        else console.error("Hand tracking failed", error);
+        return;
+      }
       const scores = res.handedness ?? res.handednesses ?? [];
       const hands: RawHand[] = (res.landmarks ?? []).map((l, i) => ({
         landmarks: l,
@@ -165,9 +181,17 @@ export class MediaPipeHandSource implements HandSource {
   }
 
   stop() {
+    this.cameraRequest++;
     this.running = false;
     cancelAnimationFrame(this.raf);
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
+  }
+
+  dispose() {
+    this.disposed = true;
+    this.stop();
+    this.landmarker?.close();
+    this.landmarker = null;
   }
 }
