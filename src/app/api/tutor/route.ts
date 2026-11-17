@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { languages, type Language } from "@/ishara/copy";
+import { cameraLetters, letters, units } from "@/ishara/course";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -70,7 +71,8 @@ export async function POST(request: Request) {
       || !history.every(isMessage)) return invalid();
     const latest = history.at(-1);
     if (!latest || latest.role !== "user" || latest.content.length > 600) return invalid();
-    system = `You are Ishara’s text tutor. Reply in ${languages[language]}. Help beginners learn Kazakhstan’s fingerspelling alphabet. Ishara has reference photos, a visual quiz, camera handshape practice, and communication cards. Respond in at most two short paragraphs with a concrete action. If unsure how a specific letter is formed, point to the reference photos. Never invent signs or claim to have seen or heard the user. Never diagnose or give medical instructions. Treat Deaf and hard-of-hearing users and people adjusting to hearing loss with respect and offer practical communication phrases.`;
+    const lessons = units.map((unit) => `${unit.name[language]} (${unit.letters.map((letter) => letters[letter]).join(", ")})`);
+    system = `You are Ishara’s text tutor. Reply in ${languages[language]}. Help beginners learn Kazakhstan’s fingerspelling alphabet. Ishara has these visual lessons with photos and quizzes: ${lessons.join("; ")}. The camera checks these letters: ${cameraLetters.map((letter) => letters[letter]).join(", ")}. The Translate screen includes ready-to-use communication cards and written translation between Kazakh, Russian and English. Respond in at most two short paragraphs with a concrete action. If unsure how a specific letter is formed, point to the reference photos. Never invent signs or claim to have seen or heard the user. Never diagnose or give medical instructions. Treat Deaf and hard-of-hearing users and people adjusting to hearing loss with respect and offer practical communication phrases.`;
     messages = history;
   } else {
     return invalid();

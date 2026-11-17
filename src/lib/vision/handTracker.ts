@@ -49,6 +49,9 @@ const WASM_BASE = "/mediapipe/wasm";
 /** Self-hosted model (downloaded on install), with Google's CDN as fallback. */
 const MODEL_LOCAL = "/models/hand_landmarker.task";
 const MODEL_REMOTE = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+// Match the MediaPipe package pinned in package.json and the task already checked into the repo.
+const WASM_CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
+const MODEL_CDN = "https://cdn.jsdelivr.net/gh/Anuar-zxc/naruto-jutsu@bac50b05e86962865d875a382ca2dec1dd9575d3/public/models/hand_landmarker.task";
 
 type Landmarker = {
   detectForVideo(video: HTMLVideoElement, ts: number): {
@@ -60,14 +63,32 @@ type Landmarker = {
   close(): void;
 };
 
-async function pickModelUrl(): Promise<string> {
-  try {
-    const r = await fetch(MODEL_LOCAL, { method: "HEAD" });
-    if (r.ok) return MODEL_LOCAL;
-  } catch {
-    /* fall through */
+async function getAsset(url: string, signal: AbortSignal) {
+  const response = await fetch(url, { signal: AbortSignal.any([signal, AbortSignal.timeout(75_000)]) });
+  if (!response.ok) throw new Error(`Could not load hand-tracking asset (HTTP ${response.status})`);
+  return response;
+}
+
+async function downloadAsset<T>(local: string, mirror: string, signal: AbortSignal, read: (response: Response) => Promise<T>) {
+  if (process.env.NODE_ENV === "production" && window.location.hostname.endsWith(".vercel.app")) {
+    try {
+      const mirrorSignal = AbortSignal.any([signal, AbortSignal.timeout(30_000)]);
+      return await read(await getAsset(mirror, mirrorSignal));
+    } catch (error) {
+      if (signal.aborted) throw error;
+    }
   }
-  return MODEL_REMOTE;
+  return await read(await getAsset(local, signal));
+}
+
+async function loadModel(signal: AbortSignal) {
+  const read = async (response: Response) => new Uint8Array(await response.arrayBuffer());
+  try {
+    return await downloadAsset(MODEL_LOCAL, MODEL_CDN, signal, read);
+  } catch (error) {
+    if (signal.aborted) throw error;
+    return await read(await getAsset(MODEL_REMOTE, signal));
+  }
 }
 
 export class MediaPipeHandSource implements HandSource {
@@ -80,16 +101,25 @@ export class MediaPipeHandSource implements HandSource {
   private lastTs = 0;
   private cameraRequest = 0;
   private disposed = false;
+  private readonly loading = new AbortController();
 
   async init() {
-    if (this.landmarker) return;
+    if (this.landmarker || this.disposed) return;
+    const signal = this.loading.signal;
+    let wasmUrl: string | undefined;
     try {
-      const { FilesetResolver, HandLandmarker } = await import("@mediapipe/tasks-vision");
-      const fileset = await FilesetResolver.forVisionTasks(WASM_BASE);
-      const modelAssetPath = await pickModelUrl();
+      const wasmRuntime = import("@mediapipe/tasks-vision").then(async ({ FilesetResolver, HandLandmarker }) => {
+        const fileset = await FilesetResolver.forVisionTasks(WASM_BASE);
+        const cdnUrl = `${WASM_CDN}/${fileset.wasmBinaryPath.split("/").at(-1)}`;
+        const wasm = await downloadAsset(fileset.wasmBinaryPath, cdnUrl, signal, (response) => response.blob());
+        return { fileset, HandLandmarker, wasm };
+      });
+      const [modelAssetBuffer, { fileset, HandLandmarker, wasm }] = await Promise.all([loadModel(signal), wasmRuntime]);
+      wasmUrl = URL.createObjectURL(wasm);
+      const runtime = { ...fileset, wasmBinaryPath: wasmUrl };
       const create = (delegate: "GPU" | "CPU") =>
-        HandLandmarker.createFromOptions(fileset, {
-          baseOptions: { modelAssetPath, delegate },
+        HandLandmarker.createFromOptions(runtime, {
+          baseOptions: { modelAssetBuffer, delegate },
           runningMode: "VIDEO",
           numHands: 2,
           minHandDetectionConfidence: 0.55,
@@ -105,8 +135,11 @@ export class MediaPipeHandSource implements HandSource {
       if (this.disposed) lm.close();
       else this.landmarker = lm as unknown as Landmarker;
     } catch (e) {
+      if (signal.aborted) return;
       console.error("[shinobi] model load failed", e);
       throw new CameraError("model", CAMERA_ERROR_TEXT.model);
+    } finally {
+      if (wasmUrl) URL.revokeObjectURL(wasmUrl);
     }
   }
 
@@ -190,6 +223,7 @@ export class MediaPipeHandSource implements HandSource {
 
   dispose() {
     this.disposed = true;
+    this.loading.abort();
     this.stop();
     this.landmarker?.close();
     this.landmarker = null;
